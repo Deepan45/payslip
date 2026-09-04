@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
+    container_name: payslip-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: payslip
@@ -16,6 +17,7 @@ services:
 
   backend:
     build: ./backend
+    container_name: payslip-backend
     restart: unless-stopped
     depends_on:
       db:
@@ -41,6 +43,7 @@ services:
       context: ./frontend
       args:
         VITE_API_URL: /api
+    container_name: payslip-frontend
     restart: unless-stopped
     depends_on:
       - backend
