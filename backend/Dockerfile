@@ -6,6 +6,7 @@ RUN npm install
 
 # --- build: compile TypeScript and generate the Prisma client ---
 FROM node:20-alpine AS build
+RUN apk add --no-cache openssl
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -14,6 +15,7 @@ RUN npm run build
 
 # --- runtime: production-only node_modules + compiled output ---
 FROM node:20-alpine AS runtime
+RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json* ./
