@@ -5,6 +5,7 @@ import { downloadPayslip, downloadAllPayslipsForSheet } from "../api/payslip";
 import { Pagination } from "../components/Pagination";
 import { PayslipPreviewModal } from "../components/PayslipPreviewModal";
 import { ActionButton } from "../components/ActionButton";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageLoader } from "../components/PageLoader";
 
 const PAGE_SIZE = 25;
@@ -42,6 +43,9 @@ export function HistoryDetail() {
   const [page, setPage] = useState(1);
   const [preview, setPreview] = useState<{ payslipId: string; title: string } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmBulkRecords, setConfirmBulkRecords] = useState(false);
+  const [confirmRecordId, setConfirmRecordId] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState(false);
 
   function load() {
     if (!sheetId) return;
@@ -86,7 +90,6 @@ export function HistoryDetail() {
 
   async function handleDeleteSelected() {
     if (!sheetId || selected.size === 0) return;
-    if (!window.confirm(`Delete ${selected.size} selected payslip(s)? This cannot be undone.`)) return;
     setError(null);
     setDeleting(true);
     try {
@@ -97,12 +100,12 @@ export function HistoryDetail() {
       setError(apiErrorMessage(err, "Failed to delete selected payslips"));
     } finally {
       setDeleting(false);
+      setConfirmBulkRecords(false);
     }
   }
 
   async function handleDeleteOne(recordId: string) {
     if (!sheetId) return;
-    if (!window.confirm("Delete this payslip? This cannot be undone.")) return;
     setError(null);
     setDeleting(true);
     try {
@@ -117,12 +120,12 @@ export function HistoryDetail() {
       setError(apiErrorMessage(err, "Failed to delete payslip"));
     } finally {
       setDeleting(false);
+      setConfirmRecordId(null);
     }
   }
 
   async function handleDeleteSheet() {
     if (!sheetId || !sheet) return;
-    if (!window.confirm(`Delete this entire upload — all ${sheet.salaryRecords.length} payslip(s)? This cannot be undone.`)) return;
     setError(null);
     setDeleting(true);
     try {
@@ -131,6 +134,7 @@ export function HistoryDetail() {
     } catch (err) {
       setError(apiErrorMessage(err, "Failed to delete sheet"));
       setDeleting(false);
+      setConfirmSheet(false);
     }
   }
 
@@ -161,12 +165,12 @@ export function HistoryDetail() {
               {bulkLoading ? "Preparing zip..." : "Download All (.zip)"}
             </button>
             {selected.size > 0 && (
-              <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={handleDeleteSelected}>
+              <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={() => setConfirmBulkRecords(true)}>
                 {deleting ? "Deleting..." : `Delete ${selected.size} Selected`}
               </ActionButton>
             )}
           </div>
-          <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={handleDeleteSheet}>
+          <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={() => setConfirmSheet(true)}>
             Delete This Sheet
           </ActionButton>
         </div>
@@ -211,7 +215,7 @@ export function HistoryDetail() {
                     ) : (
                       <span className="muted small">Not generated</span>
                     )}
-                    <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={() => handleDeleteOne(r.id)}>
+                    <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={() => setConfirmRecordId(r.id)}>
                       Delete
                     </ActionButton>
                   </td>
@@ -224,6 +228,31 @@ export function HistoryDetail() {
       </div>
 
       {preview && <PayslipPreviewModal payslipId={preview.payslipId} title={preview.title} onClose={() => setPreview(null)} />}
+
+      <ConfirmDialog
+        open={confirmRecordId !== null}
+        title="Delete this payslip?"
+        message="This cannot be undone."
+        loading={deleting}
+        onConfirm={() => confirmRecordId && handleDeleteOne(confirmRecordId)}
+        onCancel={() => setConfirmRecordId(null)}
+      />
+      <ConfirmDialog
+        open={confirmBulkRecords}
+        title={`Delete ${selected.size} payslip(s)?`}
+        message="This cannot be undone."
+        loading={deleting}
+        onConfirm={handleDeleteSelected}
+        onCancel={() => setConfirmBulkRecords(false)}
+      />
+      <ConfirmDialog
+        open={confirmSheet}
+        title="Delete this entire upload?"
+        message={sheet ? `All ${sheet.salaryRecords.length} payslip(s) in this upload will be deleted. This cannot be undone.` : ""}
+        loading={deleting}
+        onConfirm={handleDeleteSheet}
+        onCancel={() => setConfirmSheet(false)}
+      />
     </div>
   );
 }

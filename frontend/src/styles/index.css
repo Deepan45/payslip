@@ -418,6 +418,22 @@ input::placeholder { color: #a9abbc; }
 .btn-primary:hover { background: var(--color-navy-dark); box-shadow: var(--shadow-sm); }
 .btn-primary:active { transform: translateY(1px); }
 .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
+.btn-primary.btn-danger { background: var(--color-error); }
+.btn-primary.btn-danger:hover { background: #b42318; }
+
+.btn-secondary {
+  background: #fff;
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.btn-secondary:hover { background: var(--color-bg); }
+.btn-secondary:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .spinner {
   display: inline-block;
@@ -677,6 +693,27 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .modal-body { flex: 1; background: #525659; }
 .modal-body iframe { width: 100%; height: 100%; border: none; }
 .modal-footer { padding: 12px 20px; border-top: 1px solid var(--color-border); display: flex; gap: 10px; justify-content: flex-end; }
+
+/* Small centered confirm/delete dialog — shares .modal-overlay above for the backdrop */
+.confirm-modal-panel {
+  background: #fff;
+  border-radius: var(--radius);
+  width: min(400px, 100%);
+  padding: 24px;
+  box-shadow: var(--shadow-lg);
+}
+.confirm-modal-icon {
+  width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 14px;
+}
+.confirm-modal-icon-danger { background: var(--color-error-bg); color: var(--color-error); }
+.confirm-modal-icon-default { background: var(--color-navy-tint); color: var(--color-navy); }
+.confirm-modal-panel h3 { margin: 0 0 6px; font-size: 15px; }
+.confirm-modal-panel p { margin: 0; font-size: 13px; color: var(--color-muted); line-height: 1.55; }
+.confirm-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+.confirm-modal-actions .btn-primary,
+.confirm-modal-actions .btn-secondary { display: inline-flex; align-items: center; gap: 6px; }
 
 .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
 .stat-grid-4 { grid-template-columns: repeat(4, 1fr); }

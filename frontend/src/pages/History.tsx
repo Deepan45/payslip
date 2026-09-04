@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { PageLoader } from "../components/PageLoader";
 
@@ -27,6 +28,8 @@ export function History() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<Sheet | null>(null);
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   function load() {
     setLoading(true);
@@ -39,9 +42,6 @@ export function History() {
   useEffect(load, []);
 
   async function handleDelete(sheet: Sheet) {
-    if (!window.confirm(`Delete this entire upload — ${sheet.recordCount} payslip(s) for ${sheet.client.name}, ${MONTH_NAMES[sheet.periodMonth - 1]} ${sheet.periodYear}? This cannot be undone.`)) {
-      return;
-    }
     setError(null);
     setDeletingId(sheet.id);
     try {
@@ -56,6 +56,7 @@ export function History() {
       setError(apiErrorMessage(err, "Failed to delete sheet"));
     } finally {
       setDeletingId(null);
+      setConfirmTarget(null);
     }
   }
 
@@ -74,7 +75,6 @@ export function History() {
 
   async function handleDeleteSelected() {
     if (selected.size === 0) return;
-    if (!window.confirm(`Delete ${selected.size} selected upload(s) — every payslip in them? This cannot be undone.`)) return;
     setError(null);
     setBulkDeleting(true);
     try {
@@ -86,6 +86,7 @@ export function History() {
       setError(apiErrorMessage(err, "Failed to delete selected uploads"));
     } finally {
       setBulkDeleting(false);
+      setConfirmBulk(false);
     }
   }
 
@@ -103,7 +104,7 @@ export function History() {
             <h2 style={{ margin: 0 }}>All Uploaded Sheets</h2>
           </div>
           {selected.size > 0 && (
-            <ActionButton icon="delete" tone="danger" disabled={bulkDeleting} onClick={handleDeleteSelected}>
+            <ActionButton icon="delete" tone="danger" disabled={bulkDeleting} onClick={() => setConfirmBulk(true)}>
               {bulkDeleting ? "Deleting..." : `Delete ${selected.size} Selected`}
             </ActionButton>
           )}
@@ -151,7 +152,7 @@ export function History() {
                         </svg>
                         View
                       </Link>
-                      <ActionButton icon="delete" tone="danger" disabled={deletingId === s.id} onClick={() => handleDelete(s)}>
+                      <ActionButton icon="delete" tone="danger" disabled={deletingId === s.id} onClick={() => setConfirmTarget(s)}>
                         {deletingId === s.id ? "Deleting..." : "Delete"}
                       </ActionButton>
                     </td>
@@ -162,6 +163,27 @@ export function History() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmTarget !== null}
+        title="Delete this upload?"
+        message={
+          confirmTarget
+            ? `Delete this entire upload — ${confirmTarget.recordCount} payslip(s) for ${confirmTarget.client.name}, ${MONTH_NAMES[confirmTarget.periodMonth - 1]} ${confirmTarget.periodYear}? This cannot be undone.`
+            : ""
+        }
+        loading={deletingId === confirmTarget?.id}
+        onConfirm={() => confirmTarget && handleDelete(confirmTarget)}
+        onCancel={() => setConfirmTarget(null)}
+      />
+      <ConfirmDialog
+        open={confirmBulk}
+        title={`Delete ${selected.size} upload(s)?`}
+        message="Every payslip in these uploads will be deleted. This cannot be undone."
+        loading={bulkDeleting}
+        onConfirm={handleDeleteSelected}
+        onCancel={() => setConfirmBulk(false)}
+      />
     </div>
   );
 }

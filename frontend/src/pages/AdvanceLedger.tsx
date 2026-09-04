@@ -3,6 +3,7 @@ import { api, apiErrorMessage } from "../api/client";
 import { Pagination } from "../components/Pagination";
 import { EmptyState } from "../components/EmptyState";
 import { ActionButton } from "../components/ActionButton";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageLoader } from "../components/PageLoader";
 
 const PAGE_SIZE = 20;
@@ -55,6 +56,8 @@ export function AdvanceLedger() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState("");
   const [editNote, setEditNote] = useState("");
+  const [confirmEntryId, setConfirmEntryId] = useState<string | null>(null);
+  const [deletingEntry, setDeletingEntry] = useState(false);
 
   function loadSummary() {
     setLoading(true);
@@ -126,14 +129,17 @@ export function AdvanceLedger() {
 
   async function deleteEntry(entryId: string) {
     if (!selected) return;
-    if (!window.confirm("Delete this advance entry? This cannot be undone.")) return;
     setError(null);
+    setDeletingEntry(true);
     try {
       await api.delete(`/advances/entries/${entryId}`);
       loadEntries(selected.employee.id);
       loadSummary();
     } catch (err) {
       setError(apiErrorMessage(err, "Failed to delete entry"));
+    } finally {
+      setDeletingEntry(false);
+      setConfirmEntryId(null);
     }
   }
 
@@ -295,7 +301,7 @@ export function AdvanceLedger() {
                                     <ActionButton icon="edit" onClick={() => startEdit(e)}>
                                       Edit
                                     </ActionButton>
-                                    <ActionButton icon="delete" tone="danger" onClick={() => deleteEntry(e.id)}>
+                                    <ActionButton icon="delete" tone="danger" onClick={() => setConfirmEntryId(e.id)}>
                                       Delete
                                     </ActionButton>
                                   </>
@@ -321,6 +327,15 @@ export function AdvanceLedger() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmEntryId !== null}
+        title="Delete advance entry?"
+        message="This cannot be undone."
+        loading={deletingEntry}
+        onConfirm={() => confirmEntryId && deleteEntry(confirmEntryId)}
+        onCancel={() => setConfirmEntryId(null)}
+      />
     </div>
   );
 }

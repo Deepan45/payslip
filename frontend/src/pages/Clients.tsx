@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Avatar } from "../components/Avatar";
 import { EmptyState } from "../components/EmptyState";
 import { PageLoader } from "../components/PageLoader";
@@ -29,6 +30,8 @@ export function Clients() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<ClientRow | null>(null);
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   function load() {
     setLoading(true);
@@ -41,7 +44,6 @@ export function Clients() {
   useEffect(load, []);
 
   async function handleDelete(c: ClientRow) {
-    if (!window.confirm(`Delete "${c.name}"? This only works if it has no employees or uploaded sheets.`)) return;
     setError(null);
     setDeletingId(c.id);
     try {
@@ -56,6 +58,7 @@ export function Clients() {
       setError(apiErrorMessage(err, "Failed to delete client"));
     } finally {
       setDeletingId(null);
+      setConfirmTarget(null);
     }
   }
 
@@ -74,7 +77,6 @@ export function Clients() {
 
   async function handleDeleteSelected() {
     if (selected.size === 0) return;
-    if (!window.confirm(`Delete ${selected.size} selected client(s)? Any with employees or uploaded sheets will be skipped.`)) return;
     setError(null);
     setBulkDeleting(true);
     try {
@@ -89,6 +91,7 @@ export function Clients() {
       setError(apiErrorMessage(err, "Failed to delete selected clients"));
     } finally {
       setBulkDeleting(false);
+      setConfirmBulk(false);
     }
   }
 
@@ -131,7 +134,7 @@ export function Clients() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {selected.size > 0 && (
-              <ActionButton icon="delete" tone="danger" disabled={bulkDeleting} onClick={handleDeleteSelected}>
+              <ActionButton icon="delete" tone="danger" disabled={bulkDeleting} onClick={() => setConfirmBulk(true)}>
                 {bulkDeleting ? "Deleting..." : `Delete ${selected.size} Selected`}
               </ActionButton>
             )}
@@ -218,7 +221,7 @@ export function Clients() {
                         </svg>
                         Upload
                       </Link>
-                      <ActionButton icon="delete" tone="danger" disabled={deletingId === c.id} onClick={() => handleDelete(c)}>
+                      <ActionButton icon="delete" tone="danger" disabled={deletingId === c.id} onClick={() => setConfirmTarget(c)}>
                         {deletingId === c.id ? "Deleting..." : "Delete"}
                       </ActionButton>
                     </td>
@@ -229,6 +232,23 @@ export function Clients() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmTarget !== null}
+        title="Delete client?"
+        message={confirmTarget ? `Delete "${confirmTarget.name}"? This only works if it has no employees or uploaded sheets.` : ""}
+        loading={deletingId === confirmTarget?.id}
+        onConfirm={() => confirmTarget && handleDelete(confirmTarget)}
+        onCancel={() => setConfirmTarget(null)}
+      />
+      <ConfirmDialog
+        open={confirmBulk}
+        title={`Delete ${selected.size} client(s)?`}
+        message="Any with employees or uploaded sheets will be skipped rather than deleted."
+        loading={bulkDeleting}
+        onConfirm={handleDeleteSelected}
+        onCancel={() => setConfirmBulk(false)}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../api/client";
 import { ActionButton } from "../components/ActionButton";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Pagination } from "../components/Pagination";
 import { Avatar } from "../components/Avatar";
 import { EmptyState } from "../components/EmptyState";
@@ -27,6 +28,8 @@ export function Employees() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<Employee | null>(null);
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   function load() {
     setLoading(true);
@@ -39,7 +42,6 @@ export function Employees() {
   useEffect(load, []);
 
   async function handleDelete(emp: Employee) {
-    if (!window.confirm(`Delete ${emp.name} (${emp.employeeCode})? This only works if they have no payslip or advance history.`)) return;
     setError(null);
     setDeletingId(emp.id);
     try {
@@ -54,6 +56,7 @@ export function Employees() {
       setError(apiErrorMessage(err, "Failed to delete employee"));
     } finally {
       setDeletingId(null);
+      setConfirmTarget(null);
     }
   }
 
@@ -79,7 +82,6 @@ export function Employees() {
 
   async function handleDeleteSelected() {
     if (selected.size === 0) return;
-    if (!window.confirm(`Delete ${selected.size} selected employee(s)? Any with payslip or advance history will be skipped.`)) return;
     setError(null);
     setBulkDeleting(true);
     try {
@@ -94,6 +96,7 @@ export function Employees() {
       setError(apiErrorMessage(err, "Failed to delete selected employees"));
     } finally {
       setBulkDeleting(false);
+      setConfirmBulk(false);
     }
   }
 
@@ -130,7 +133,7 @@ export function Employees() {
           />
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {selected.size > 0 && (
-              <ActionButton icon="delete" tone="danger" disabled={bulkDeleting} onClick={handleDeleteSelected}>
+              <ActionButton icon="delete" tone="danger" disabled={bulkDeleting} onClick={() => setConfirmBulk(true)}>
                 {bulkDeleting ? "Deleting..." : `Delete ${selected.size} Selected`}
               </ActionButton>
             )}
@@ -184,7 +187,7 @@ export function Employees() {
                           </svg>
                           View history
                         </Link>
-                        <ActionButton icon="delete" tone="danger" disabled={deletingId === e.id} onClick={() => handleDelete(e)}>
+                        <ActionButton icon="delete" tone="danger" disabled={deletingId === e.id} onClick={() => setConfirmTarget(e)}>
                           {deletingId === e.id ? "Deleting..." : "Delete"}
                         </ActionButton>
                       </td>
@@ -197,6 +200,27 @@ export function Employees() {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmTarget !== null}
+        title="Delete employee?"
+        message={
+          confirmTarget
+            ? `Delete ${confirmTarget.name} (${confirmTarget.employeeCode})? This only works if they have no payslip or advance history.`
+            : ""
+        }
+        loading={deletingId === confirmTarget?.id}
+        onConfirm={() => confirmTarget && handleDelete(confirmTarget)}
+        onCancel={() => setConfirmTarget(null)}
+      />
+      <ConfirmDialog
+        open={confirmBulk}
+        title={`Delete ${selected.size} employee(s)?`}
+        message="Any with payslip or advance history will be skipped rather than deleted."
+        loading={bulkDeleting}
+        onConfirm={handleDeleteSelected}
+        onCancel={() => setConfirmBulk(false)}
+      />
     </div>
   );
 }
