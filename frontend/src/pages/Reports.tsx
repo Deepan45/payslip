@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { ActionButton } from "../components/ActionButton";
 import { EmptyState } from "../components/EmptyState";
 import { PageLoader } from "../components/PageLoader";
 
@@ -41,6 +42,7 @@ export function Reports() {
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [grandTotal, setGrandTotal] = useState<ReportRow | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     api.get("/clients").then((res) => setClients(res.data.clients));
@@ -59,6 +61,26 @@ export function Reports() {
 
   useEffect(load, [month, year, clientId]);
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const res = await api.get("/reports/export", {
+        params: { periodMonth: month, periodYear: year, clientId: clientId || undefined },
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(res.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `payroll-report-${MONTH_NAMES[month - 1]}-${year}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div>
       <h1>Reports</h1>
@@ -69,13 +91,20 @@ export function Reports() {
       </p>
 
       <div className="card">
-        <div className="section-title" style={{ marginBottom: 16 }}>
-          <span className="section-title-icon stat-icon-pink">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 3v18h18M8 17V10M13 17V6M18 17v-4" />
-            </svg>
-          </span>
-          <h2 style={{ margin: 0 }}>Payroll Summary</h2>
+        <div className="toolbar" style={{ justifyContent: "space-between", marginBottom: 16 }}>
+          <div className="section-title">
+            <span className="section-title-icon stat-icon-pink">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3v18h18M8 17V10M13 17V6M18 17v-4" />
+              </svg>
+            </span>
+            <h2 style={{ margin: 0 }}>Payroll Summary</h2>
+          </div>
+          {rows.length > 0 && (
+            <ActionButton icon="download" disabled={exporting} onClick={handleExport}>
+              {exporting ? "Exporting..." : "Export Excel"}
+            </ActionButton>
+          )}
         </div>
 
         <div className="form-row" style={{ maxWidth: 560, marginBottom: 4 }}>

@@ -25,6 +25,16 @@ const MID_GAP = 14;
 const COL_WIDTH = (PAGE_WIDTH - MID_GAP) / 2;
 const RIGHT_COL_X = PAGE_LEFT + COL_WIDTH + MID_GAP;
 
+// Where the header's right-hand "PAYSLIP" block starts. Tied to one number
+// (rather than sizing the company-info block and the PAYSLIP block from two
+// unrelated constants) so the two are always flush against each other with
+// a fixed gutter, instead of leaving a leftover gap between wherever the
+// company text happens to wrap and wherever the PAYSLIP box was hardcoded
+// to start. 355pt leaves ~190pt on the right — enough for "For the Month
+// of September 2026" (the longest realistic date line) on one line.
+const HEADER_SPLIT_X = PAGE_LEFT + 305;
+const HEADER_GUTTER = 14;
+
 export interface PayslipPdfData {
   company: {
     name: string;
@@ -132,7 +142,7 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     }
 
     const textX = logoDrawn ? PAGE_LEFT + LOGO_SIZE + 14 : PAGE_LEFT;
-    const textW = logoDrawn ? 234 : 260;
+    const textW = HEADER_SPLIT_X - HEADER_GUTTER - textX;
     let ly = headerTop;
     doc.font("Helvetica-Bold").fontSize(17).fillColor(NAVY).text(data.company.name, textX, ly, { width: textW });
     ly = doc.y + 2;
@@ -153,20 +163,21 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
       ly = doc.y + 1;
     }
 
+    const headerRightW = PAGE_RIGHT - HEADER_SPLIT_X;
     doc
       .font("Helvetica-Bold")
       .fontSize(20)
       .fillColor(NAVY)
-      .text("PAYSLIP", PAGE_LEFT + 260, headerTop, { width: PAGE_WIDTH - 260, align: "right" });
+      .text("PAYSLIP", HEADER_SPLIT_X, headerTop, { width: headerRightW, align: "right" });
     doc
       .font("Helvetica")
       .fontSize(9.5)
       .fillColor(NAVY_MUTED)
       .text(
         `For the Month of ${MONTH_NAMES[data.period.month - 1] ?? data.period.month} ${data.period.year}`,
-        PAGE_LEFT + 260,
+        HEADER_SPLIT_X,
         doc.y + 2,
-        { width: PAGE_WIDTH - 260, align: "right" }
+        { width: headerRightW, align: "right" }
       );
     doc.fillColor("black");
 
