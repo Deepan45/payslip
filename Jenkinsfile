@@ -24,6 +24,11 @@ pipeline {
         FRONTEND_PORT       = '8080'
         BACKEND_PORT        = '4000'
 
+        // Public address the app is actually reached at (browser origin).
+        // Override with the server's IP/domain — CORS_ORIGIN below is built
+        // from this, and the backend only auto-allows localhost/127.0.0.1.
+        PUBLIC_HOST         = '93.127.194.128'
+
         DOCKER_NETWORK      = 'payslip-network'
     }
 
@@ -124,8 +129,8 @@ pipeline {
                       -e JWT_SECRET="${JWT_SECRET}" \
                       -e JWT_EXPIRES_IN="8h" \
                       -e PORT=4000 \
-                      -e CORS_ORIGIN="http://localhost:${FRONTEND_PORT}" \
-                      -e PUBLIC_BASE_URL="http://localhost:${FRONTEND_PORT}" \
+                      -e CORS_ORIGIN="http://${PUBLIC_HOST}:${FRONTEND_PORT}" \
+                      -e PUBLIC_BASE_URL="http://${PUBLIC_HOST}:${FRONTEND_PORT}" \
                       -e SEED_ADMIN_EMAIL="${SEED_ADMIN_EMAIL}" \
                       -e SEED_ADMIN_PASSWORD="${SEED_ADMIN_PASSWORD}" \
                       -e COMPANY_NAME="Your Company Pvt Ltd" \
