@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api/client";
+import { api, apiErrorMessage } from "../api/client";
+import { ActionButton } from "../components/ActionButton";
 import { Pagination } from "../components/Pagination";
 import { Avatar } from "../components/Avatar";
 import { EmptyState } from "../components/EmptyState";
@@ -22,13 +23,32 @@ export function Employees() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  function load() {
+    setLoading(true);
     api
       .get("/employees")
       .then((res) => setEmployees(res.data.employees))
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(load, []);
+
+  async function handleDelete(emp: Employee) {
+    if (!window.confirm(`Delete ${emp.name} (${emp.employeeCode})? This only works if they have no payslip or advance history.`)) return;
+    setError(null);
+    setDeletingId(emp.id);
+    try {
+      await api.delete(`/employees/${emp.id}`);
+      setEmployees((prev) => prev.filter((e) => e.id !== emp.id));
+    } catch (err) {
+      setError(apiErrorMessage(err, "Failed to delete employee"));
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const filtered = employees.filter((e) => {
     const q = search.toLowerCase();
@@ -63,6 +83,8 @@ export function Employees() {
           {!loading && <span className="muted small">{filtered.length} of {employees.length} employees</span>}
         </div>
 
+        {error && <div className="alert alert-error">{error}</div>}
+
         {loading ? (
           <PageLoader message="Loading employees..." />
         ) : filtered.length === 0 ? (
@@ -94,13 +116,16 @@ export function Employees() {
                       <td>{e.designation ?? "-"}</td>
                       <td>{e.department ?? "-"}</td>
                       <td>{e.currentClient?.name ?? "-"}</td>
-                      <td>
+                      <td className="actions">
                         <Link to={`/employees/${e.id}`} className="btn-action">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M5 12h14M13 6l6 6-6 6" />
                           </svg>
                           View history
                         </Link>
+                        <ActionButton icon="delete" tone="danger" disabled={deletingId === e.id} onClick={() => handleDelete(e)}>
+                          {deletingId === e.id ? "Deleting..." : "Delete"}
+                        </ActionButton>
                       </td>
                     </tr>
                   ))}

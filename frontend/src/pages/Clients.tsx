@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../api/client";
+import { ActionButton } from "../components/ActionButton";
 import { Avatar } from "../components/Avatar";
 import { EmptyState } from "../components/EmptyState";
 import { PageLoader } from "../components/PageLoader";
@@ -25,6 +26,7 @@ export function Clients() {
   const [contactPhone, setContactPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   function load() {
     setLoading(true);
@@ -35,6 +37,20 @@ export function Clients() {
   }
 
   useEffect(load, []);
+
+  async function handleDelete(c: ClientRow) {
+    if (!window.confirm(`Delete "${c.name}"? This only works if it has no employees or uploaded sheets.`)) return;
+    setError(null);
+    setDeletingId(c.id);
+    try {
+      await api.delete(`/clients/${c.id}`);
+      setClients((prev) => prev.filter((x) => x.id !== c.id));
+    } catch (err) {
+      setError(apiErrorMessage(err, "Failed to delete client"));
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -78,9 +94,10 @@ export function Clients() {
           </button>
         </div>
 
+        {error && <div className="alert alert-error">{error}</div>}
+
         {showForm && (
           <form onSubmit={handleCreate} style={{ marginBottom: 20, maxWidth: 480 }}>
-            {error && <div className="alert alert-error">{error}</div>}
             <label>
               Client / Site name
               <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus placeholder="e.g. Glen Appliances" />
@@ -141,13 +158,16 @@ export function Clients() {
                         <span className="badge badge-warn">Not yet mapped</span>
                       )}
                     </td>
-                    <td>
+                    <td className="actions">
                       <Link to={`/upload?clientId=${c.id}`} className="btn-action">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M12 16V4M12 4l-4 4M12 4l4 4M4 20h16" />
                         </svg>
                         Upload
                       </Link>
+                      <ActionButton icon="delete" tone="danger" disabled={deletingId === c.id} onClick={() => handleDelete(c)}>
+                        {deletingId === c.id ? "Deleting..." : "Delete"}
+                      </ActionButton>
                     </td>
                   </tr>
                 ))}

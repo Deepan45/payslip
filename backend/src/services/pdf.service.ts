@@ -121,7 +121,7 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     // === Header: logo + company block (left), PAYSLIP + period (right) ===
     const headerTop = doc.y;
     let logoDrawn = false;
-    const LOGO_SIZE = 76;
+    const LOGO_SIZE = 100;
     if (data.company.logoPath && fs.existsSync(data.company.logoPath)) {
       try {
         doc.image(data.company.logoPath, PAGE_LEFT, headerTop, { width: LOGO_SIZE, height: LOGO_SIZE, fit: [LOGO_SIZE, LOGO_SIZE] });

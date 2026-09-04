@@ -84,6 +84,8 @@ export interface ColumnMapping {
 const HEADER_ALIASES: Record<string, CanonicalField> = {
   employeeid: "employeeCode", empid: "employeeCode", employeecode: "employeeCode",
   empcode: "employeeCode", code: "employeeCode", tokenno: "employeeCode",
+  staffcode: "employeeCode", staffno: "employeeCode", staffid: "employeeCode",
+  workerid: "employeeCode", workercode: "employeeCode", idno: "employeeCode", empno: "employeeCode",
 
   name: "name", empname: "name", employeename: "name", nameofemployee: "name",
 
@@ -94,6 +96,7 @@ const HEADER_ALIASES: Record<string, CanonicalField> = {
   designation: "designation", rank: "designation", title: "designation",
 
   department: "department", dept: "department", plant: "department", site: "department",
+  worksite: "department", location: "department", unit: "department", sitename: "department",
 
   bankaccount: "bankAccount", bankaccountno: "bankAccount", bankac: "bankAccount",
   accountno: "bankAccount", accountn: "bankAccount", bankacno: "bankAccount",
@@ -141,21 +144,55 @@ function normalizeHeader(raw: unknown): string {
   return String(raw ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+/** Same text, kept as separate words instead of squashed — used only by the word-level fallback below. */
+function normalizeWords(raw: unknown): string[] {
+  return String(raw ?? "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+/** "exact" = the whole header matched a known alias (or matched after stripping a trailing rate digit)
+ *  — trustworthy enough to auto-select. "fuzzy" = only recovered by checking the header's individual
+ *  words, e.g. "EMP. CODE (NEW)" or "DEPT / SITE" — still offered as the default, but flagged on the
+ *  mapping screen for a human to double-check rather than trusted outright. */
+export type MatchConfidence = "exact" | "fuzzy";
+export interface AliasMatch {
+  field: CanonicalField;
+  confidence: MatchConfidence;
+}
+
 /**
- * Looks up a header's canonical field, falling back to stripping a trailing
- * digit run before retrying. Real sheets commonly suffix a rate onto the
- * label ("ESI @ 0.75%" -> "esi075", "EPF @ 12%" -> "epf12", "LWF @ 0.2%" ->
- * "lwf02") — none of which can be enumerated up front, since the rate
- * varies by sheet. An exact match always wins first, so this can't
- * misclassify a field like "ESI No" ("esino" has no trailing digit, so the
- * fallback never fires for it).
+ * Looks up a header's canonical field. Tries, in order:
+ *  1. An exact match on the whole (squashed) header.
+ *  2. The same, after stripping a trailing digit run — real sheets commonly
+ *     suffix a rate onto the label ("ESI @ 0.75%" -> "esi075", "EPF @ 12%"
+ *     -> "epf12", "LWF @ 0.2%" -> "lwf02") — none of which can be enumerated
+ *     up front, since the rate varies by sheet. Exact match always wins
+ *     first, so this can't misclassify a field like "ESI No" ("esino" has
+ *     no trailing digit, so the fallback never fires for it).
+ *  3. A per-word match — a compound/qualified header ("EMPLOYEE CODE (NEW)",
+ *     "DEPT / SITE", "A/C NO.") won't equal a known alias once squashed
+ *     together, but one of its individual words often will on its own.
+ *     Words under 3 letters are skipped here (only as a whole-header exact
+ *     match) to avoid short fragments like "no" or "id" firing on unrelated
+ *     headers; the longest matching word wins if more than one word hits.
  */
-function lookupAlias(text: string): CanonicalField | undefined {
+function lookupAlias(text: string): AliasMatch | undefined {
   const norm = normalizeHeader(text);
-  if (HEADER_ALIASES[norm]) return HEADER_ALIASES[norm];
+  if (!norm) return undefined;
+  if (HEADER_ALIASES[norm]) return { field: HEADER_ALIASES[norm], confidence: "exact" };
   const stripped = norm.replace(/\d+$/, "");
-  if (stripped !== norm && HEADER_ALIASES[stripped]) return HEADER_ALIASES[stripped];
-  return undefined;
+  if (stripped !== norm && HEADER_ALIASES[stripped]) return { field: HEADER_ALIASES[stripped], confidence: "exact" };
+
+  let best: CanonicalField | undefined;
+  let bestLen = 0;
+  for (const word of normalizeWords(text)) {
+    if (word.length < 3) continue;
+    const field = HEADER_ALIASES[word];
+    if (field && word.length > bestLen) {
+      best = field;
+      bestLen = word.length;
+    }
+  }
+  return best ? { field: best, confidence: "fuzzy" } : undefined;
 }
 
 function cellText(row: unknown[] | undefined, index: number): string {
@@ -212,6 +249,10 @@ export interface MappingSuggestion {
   columns: Partial<Record<CanonicalField, ColumnRef[]>>;
   /** All candidate columns per field, for the mapping screen to offer as alternatives. */
   candidates: Partial<Record<CanonicalField, ColumnRef[]>>;
+  /** How sure the auto-match for each field's selected column is — lets the mapping screen flag
+   *  "fuzzy" guesses (green vs. amber) for a human to double-check, instead of trusting every
+   *  auto-fill equally. Absent for a field the sheet has no candidate for at all. */
+  confidence: Partial<Record<CanonicalField, MatchConfidence>>;
   grid: unknown[][]; // first several rows, for the mapping screen to render
 }
 
@@ -240,14 +281,24 @@ export function suggestColumnMapping(grid: unknown[][]): MappingSuggestion {
   const dataStartRow = headerRowEnd + 1;
 
   const candidates: Partial<Record<CanonicalField, ColumnRef[]>> = {};
+  // Per field, per candidate column index -> how that match was found. Kept
+  // alongside `candidates` (rather than folded into ColumnRef) since it's
+  // only meaningful during suggestion — a saved ColumnMapping doesn't carry it.
+  const matchConfidence: Partial<Record<CanonicalField, Map<number, MatchConfidence>>> = {};
   for (let c = 0; c < cols; c++) {
     const rowsInBlock = [cellText(grid[headerRowStart], c), cellText(grid[headerRowEnd], c)];
     for (const text of rowsInBlock) {
-      const field = lookupAlias(text);
-      if (!field) continue;
+      const match = lookupAlias(text);
+      if (!match) continue;
+      const { field, confidence } = match;
       const fp = fingerprintAt(grid, headerRowStart, headerRowEnd, c);
       const list = (candidates[field] ??= []);
       if (!list.some((x) => x.index === c)) list.push({ index: c, fingerprint: fp });
+      const confMap = (matchConfidence[field] ??= new Map());
+      // Both header rows of a merged block can independently match (e.g. a
+      // fuzzy word-hit on the group label, an exact hit on the sub-label) —
+      // keep the more trustworthy of the two.
+      if (confMap.get(c) !== "exact") confMap.set(c, confidence);
     }
   }
 
@@ -256,8 +307,12 @@ export function suggestColumnMapping(grid: unknown[][]): MappingSuggestion {
   // figure, not the base entitlement) — shown pre-selected but always
   // overridable on the mapping screen.
   const columns: Partial<Record<CanonicalField, ColumnRef[]>> = {};
+  const confidence: Partial<Record<CanonicalField, MatchConfidence>> = {};
   for (const [field, list] of Object.entries(candidates) as [CanonicalField, ColumnRef[]][]) {
-    columns[field] = [list[list.length - 1]];
+    const chosen = list[list.length - 1];
+    columns[field] = [chosen];
+    const conf = matchConfidence[field]?.get(chosen.index);
+    if (conf) confidence[field] = conf;
   }
 
   return {
@@ -266,6 +321,7 @@ export function suggestColumnMapping(grid: unknown[][]): MappingSuggestion {
     dataStartRow,
     columns,
     candidates,
+    confidence,
     grid: grid.slice(0, Math.min(grid.length, 10)),
   };
 }

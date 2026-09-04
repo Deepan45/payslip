@@ -42,6 +42,32 @@ employeeRouter.put("/:id", requireAuth, async (req, res) => {
   }
 });
 
+// Delete an employee. Blocked if they have any salary/payslip history or
+// advance activity — that's payroll and statutory data, not something a
+// stray click should be able to erase. Only an employee with none yet
+// (e.g. added by mistake, never on a payslip) can be deleted directly.
+employeeRouter.delete("/:id", requireAuth, async (req, res) => {
+  const employee = await prisma.employee.findUnique({
+    where: { id: req.params.id },
+    include: { _count: { select: { salaryRecords: true, advanceEntries: true } } },
+  });
+  if (!employee) return res.status(404).json({ error: "Employee not found" });
+
+  if (employee._count.salaryRecords > 0) {
+    return res.status(409).json({
+      error: `${employee.name} has ${employee._count.salaryRecords} payslip record(s). Delete those uploaded sheets from History first.`,
+    });
+  }
+  if (employee._count.advanceEntries > 0) {
+    return res.status(409).json({
+      error: `${employee.name} has advance ledger entries. Delete those from the Advance Ledger first.`,
+    });
+  }
+
+  await prisma.employee.delete({ where: { id: req.params.id } });
+  res.json({ ok: true });
+});
+
 // Enables (or resets) self-service portal access for one employee, returning
 // a freshly generated temporary password ONCE — it is not recoverable after
 // this response, only reset-able.

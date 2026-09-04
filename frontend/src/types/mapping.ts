@@ -63,8 +63,15 @@ export interface ColumnMapping {
   columns: Partial<Record<CanonicalField, ColumnRef[]>>;
 }
 
+/** "exact" = the header text matched a known field name outright — trustworthy. "fuzzy" = only
+ *  recovered by checking individual words in a compound header (e.g. "EMP. CODE (NEW)") — still
+ *  offered as the default, but worth a human double-check. */
+export type MatchConfidence = "exact" | "fuzzy";
+
 export interface MappingSuggestion extends ColumnMapping {
   candidates: Partial<Record<CanonicalField, ColumnRef[]>>;
+  /** How sure the auto-match for each field's selected column is. Absent = no candidate found at all. */
+  confidence: Partial<Record<CanonicalField, MatchConfidence>>;
   grid: unknown[][];
 }
 

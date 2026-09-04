@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api/client";
+import { api, apiErrorMessage } from "../api/client";
+import { ActionButton } from "../components/ActionButton";
 import { EmptyState } from "../components/EmptyState";
 import { PageLoader } from "../components/PageLoader";
 
@@ -22,13 +23,34 @@ const MONTH_NAMES = [
 export function History() {
   const [sheets, setSheets] = useState<Sheet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  function load() {
+    setLoading(true);
     api
       .get("/history")
       .then((res) => setSheets(res.data.sheets))
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(load, []);
+
+  async function handleDelete(sheet: Sheet) {
+    if (!window.confirm(`Delete this entire upload — ${sheet.recordCount} payslip(s) for ${sheet.client.name}, ${MONTH_NAMES[sheet.periodMonth - 1]} ${sheet.periodYear}? This cannot be undone.`)) {
+      return;
+    }
+    setError(null);
+    setDeletingId(sheet.id);
+    try {
+      await api.delete(`/history/${sheet.id}`);
+      setSheets((prev) => prev.filter((s) => s.id !== sheet.id));
+    } catch (err) {
+      setError(apiErrorMessage(err, "Failed to delete sheet"));
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div>
@@ -42,6 +64,8 @@ export function History() {
           </span>
           <h2 style={{ margin: 0 }}>All Uploaded Sheets</h2>
         </div>
+
+        {error && <div className="alert alert-error">{error}</div>}
 
         {loading ? (
           <PageLoader message="Loading history..." />
@@ -70,13 +94,16 @@ export function History() {
                     <td className="muted">{s.fileName}</td>
                     <td className="num">{s.recordCount}</td>
                     <td className="muted small">{new Date(s.uploadedAt).toLocaleString()}</td>
-                    <td>
+                    <td className="actions">
                       <Link to={`/history/${s.id}`} className="btn-action">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M5 12h14M13 6l6 6-6 6" />
                         </svg>
                         View
                       </Link>
+                      <ActionButton icon="delete" tone="danger" disabled={deletingId === s.id} onClick={() => handleDelete(s)}>
+                        {deletingId === s.id ? "Deleting..." : "Delete"}
+                      </ActionButton>
                     </td>
                   </tr>
                 ))}

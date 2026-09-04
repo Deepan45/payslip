@@ -65,3 +65,29 @@ clientRouter.put("/:id", requireAuth, async (req, res) => {
     res.status(404).json({ error: "Client not found" });
   }
 });
+
+// Delete a client. Blocked if it has any uploaded salary sheets (real
+// payroll history — delete those first, from History) or any currently
+// assigned employees (reassign or clear them first) — same "don't silently
+// destroy payroll data" stance as the advance-entry delete guard below.
+clientRouter.delete("/:id", requireAuth, async (req, res) => {
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    include: { _count: { select: { employees: true, salarySheets: true } } },
+  });
+  if (!client) return res.status(404).json({ error: "Client not found" });
+
+  if (client._count.salarySheets > 0) {
+    return res.status(409).json({
+      error: `This client has ${client._count.salarySheets} uploaded salary sheet(s). Delete those from History first.`,
+    });
+  }
+  if (client._count.employees > 0) {
+    return res.status(409).json({
+      error: `This client has ${client._count.employees} employee(s) currently assigned to it. Reassign or remove them first.`,
+    });
+  }
+
+  await prisma.client.delete({ where: { id: req.params.id } }); // cascades its SiteColumnProfile
+  res.json({ ok: true });
+});

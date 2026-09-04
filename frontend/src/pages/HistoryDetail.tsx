@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { api } from "../api/client";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { api, apiErrorMessage } from "../api/client";
 import { downloadPayslip, downloadAllPayslipsForSheet } from "../api/payslip";
 import { Pagination } from "../components/Pagination";
 import { PayslipPreviewModal } from "../components/PayslipPreviewModal";
@@ -33,19 +33,26 @@ interface SheetDetail {
 
 export function HistoryDetail() {
   const { sheetId } = useParams();
+  const navigate = useNavigate();
   const [sheet, setSheet] = useState<SheetDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [preview, setPreview] = useState<{ payslipId: string; title: string } | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
+  function load() {
     if (!sheetId) return;
+    setLoading(true);
     api
       .get(`/history/${sheetId}`)
       .then((res) => setSheet(res.data.sheet))
       .finally(() => setLoading(false));
-  }, [sheetId]);
+  }
+
+  useEffect(load, [sheetId]);
 
   async function handleBulkDownload() {
     if (!sheetId) return;
@@ -57,8 +64,81 @@ export function HistoryDetail() {
     }
   }
 
+  function toggleOne(recordId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(recordId)) next.delete(recordId);
+      else next.add(recordId);
+      return next;
+    });
+  }
+
+  function toggleAllOnPage(pageRows: Record[], checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const r of pageRows) {
+        if (checked) next.add(r.id);
+        else next.delete(r.id);
+      }
+      return next;
+    });
+  }
+
+  async function handleDeleteSelected() {
+    if (!sheetId || selected.size === 0) return;
+    if (!window.confirm(`Delete ${selected.size} selected payslip(s)? This cannot be undone.`)) return;
+    setError(null);
+    setDeleting(true);
+    try {
+      await api.post(`/history/${sheetId}/records/delete`, { recordIds: Array.from(selected) });
+      setSelected(new Set());
+      load();
+    } catch (err) {
+      setError(apiErrorMessage(err, "Failed to delete selected payslips"));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleDeleteOne(recordId: string) {
+    if (!sheetId) return;
+    if (!window.confirm("Delete this payslip? This cannot be undone.")) return;
+    setError(null);
+    setDeleting(true);
+    try {
+      await api.post(`/history/${sheetId}/records/delete`, { recordIds: [recordId] });
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(recordId);
+        return next;
+      });
+      load();
+    } catch (err) {
+      setError(apiErrorMessage(err, "Failed to delete payslip"));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleDeleteSheet() {
+    if (!sheetId || !sheet) return;
+    if (!window.confirm(`Delete this entire upload — all ${sheet.salaryRecords.length} payslip(s)? This cannot be undone.`)) return;
+    setError(null);
+    setDeleting(true);
+    try {
+      await api.delete(`/history/${sheetId}`);
+      navigate("/history");
+    } catch (err) {
+      setError(apiErrorMessage(err, "Failed to delete sheet"));
+      setDeleting(false);
+    }
+  }
+
   if (loading) return <PageLoader message="Loading payslips..." />;
   if (!sheet) return <p className="alert alert-error">Sheet not found.</p>;
+
+  const pageRows = sheet.salaryRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const allOnPageSelected = pageRows.length > 0 && pageRows.every((r) => selected.has(r.id));
 
   return (
     <div>
@@ -73,16 +153,31 @@ export function HistoryDetail() {
       </p>
 
       <div className="card">
-        <div className="toolbar" style={{ justifyContent: "flex-start", gap: 10 }}>
-          <button className="btn-primary" onClick={handleBulkDownload} disabled={bulkLoading}>
-            {bulkLoading ? "Preparing zip..." : "Download All (.zip)"}
-          </button>
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <div className="toolbar" style={{ justifyContent: "space-between", gap: 10 }}>
+          <div className="toolbar" style={{ justifyContent: "flex-start", gap: 10, margin: 0 }}>
+            <button className="btn-primary" onClick={handleBulkDownload} disabled={bulkLoading}>
+              {bulkLoading ? "Preparing zip..." : "Download All (.zip)"}
+            </button>
+            {selected.size > 0 && (
+              <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={handleDeleteSelected}>
+                {deleting ? "Deleting..." : `Delete ${selected.size} Selected`}
+              </ActionButton>
+            )}
+          </div>
+          <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={handleDeleteSheet}>
+            Delete This Sheet
+          </ActionButton>
         </div>
 
         <div className="table-container">
           <table>
             <thead>
               <tr>
+                <th style={{ width: 32 }}>
+                  <input type="checkbox" checked={allOnPageSelected} onChange={(e) => toggleAllOnPage(pageRows, e.target.checked)} />
+                </th>
                 <th>Employee ID</th>
                 <th>Name</th>
                 <th>Department</th>
@@ -91,8 +186,11 @@ export function HistoryDetail() {
               </tr>
             </thead>
             <tbody>
-              {sheet.salaryRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((r) => (
+              {pageRows.map((r) => (
                 <tr key={r.id}>
+                  <td>
+                    <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleOne(r.id)} />
+                  </td>
                   <td>{r.employee.employeeCode}</td>
                   <td style={{ fontWeight: 600 }}>{r.employee.name}</td>
                   <td>{r.employee.department ?? "-"}</td>
@@ -113,6 +211,9 @@ export function HistoryDetail() {
                     ) : (
                       <span className="muted small">Not generated</span>
                     )}
+                    <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={() => handleDeleteOne(r.id)}>
+                      Delete
+                    </ActionButton>
                   </td>
                 </tr>
               ))}

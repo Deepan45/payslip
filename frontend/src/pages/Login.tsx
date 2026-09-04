@@ -36,7 +36,7 @@ export function Login() {
       <div className="auth-brand-panel">
         <div className="auth-brand-glow" />
         <div className="auth-brand-content">
-          <img src={logo} alt="Himalayan Inc" className="auth-brand-logo" />
+          <span className="auth-brand-kicker">Admin Portal</span>
           <h1 className="auth-brand-title">Himalayan Payroll</h1>
           <p className="auth-brand-tagline">One system for every client site, employee, and payslip.</p>
 
@@ -56,33 +56,35 @@ export function Login() {
       </div>
 
       <div className="auth-form-panel">
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <img src={logo} alt="Himalayan Inc" className="auth-form-logo" />
-          <h2 className="auth-form-title">Admin Sign In</h2>
-          <p className="muted small" style={{ marginBottom: 24 }}>
-            Enter your credentials to access the payroll dashboard.
-          </p>
+        <div className="auth-form-card">
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <img src={logo} alt="Himalayan Inc" className="auth-form-logo" />
+            <h2 className="auth-form-title">Admin Sign In</h2>
+            <p className="muted small" style={{ marginBottom: 24 }}>
+              Enter your credentials to access the payroll dashboard.
+            </p>
 
-          {error && <div className="alert alert-error">{error}</div>}
+            {error && <div className="alert alert-error">{error}</div>}
 
-          <label>
-            Email
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus placeholder="you@company.com" />
-          </label>
+            <label>
+              Email
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus placeholder="you@company.com" />
+            </label>
 
-          <label>
-            Password
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
-          </label>
+            <label>
+              Password
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
+            </label>
 
-          <button type="submit" className="btn-primary" disabled={loading} style={{ width: "100%", marginTop: 4 }}>
-            {loading ? "Signing in..." : "Sign in"}
-          </button>
+            <button type="submit" className="btn-primary" disabled={loading} style={{ width: "100%", marginTop: 4 }}>
+              {loading ? "Signing in..." : "Sign in"}
+            </button>
 
-          <p className="muted small" style={{ marginTop: 20, textAlign: "center" }}>
-            Trouble signing in? Contact your system administrator.
-          </p>
-        </form>
+            <p className="muted small" style={{ marginTop: 20, textAlign: "center" }}>
+              Trouble signing in? Contact your system administrator.
+            </p>
+          </form>
+        </div>
       </div>
     </div>
   );

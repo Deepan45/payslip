@@ -57,10 +57,10 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   },
 ];
 
-function NavRow({ item }: { item: NavItem }) {
+function NavRow({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   const Icon = Icons[item.icon];
   return (
-    <NavLink to={item.to} end={item.end} className={({ isActive }) => (isActive ? "active" : "")}>
+    <NavLink to={item.to} end={item.end} onClick={onNavigate} className={({ isActive }) => (isActive ? "active" : "")}>
       <span className={`sidebar-icon-wrap ${item.badge}`}>
         <Icon />
       </span>
@@ -69,9 +69,16 @@ function NavRow({ item }: { item: NavItem }) {
   );
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  /** Whether the mobile off-canvas drawer is open. Ignored above the mobile breakpoint, where the sidebar is always visible. */
+  open?: boolean;
+  /** Called when a nav link is clicked — lets the mobile drawer close itself after navigating. */
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ open, onNavigate }: SidebarProps) {
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
       <div className="sidebar-brand">
         <span className="sidebar-logo-badge">
           <img src={logo} alt="" className="sidebar-logo" />
@@ -83,13 +90,13 @@ export function Sidebar() {
       </div>
 
       <nav className="sidebar-nav">
-        <NavRow item={TOP_ITEM} />
+        <NavRow item={TOP_ITEM} onNavigate={onNavigate} />
 
         {NAV_GROUPS.map((group) => (
           <div key={group.title} className="sidebar-group">
             <div className="sidebar-group-title">{group.title}</div>
             {group.items.map((item) => (
-              <NavRow key={item.to} item={item} />
+              <NavRow key={item.to} item={item} onNavigate={onNavigate} />
             ))}
           </div>
         ))}

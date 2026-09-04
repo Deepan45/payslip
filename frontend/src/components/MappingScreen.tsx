@@ -11,6 +11,30 @@ import {
   columnLabel,
   rawFingerprint,
 } from "../types/mapping";
+
+// Confidence dot shown next to each field: green = trust it (an exact
+// header match, or the user picked it by hand — either way it's certain),
+// amber = auto-picked from a partial/compound header match, worth a
+// double-check, red = a required field with nothing mapped yet, and no dot
+// at all for an optional field the sheet simply doesn't have.
+type FieldStatus = "confident" | "doubt" | "missing" | "empty";
+
+function statusOf(hasValue: boolean, required: boolean, touched: boolean, confidence?: "exact" | "fuzzy"): FieldStatus {
+  if (!hasValue) return required ? "missing" : "empty";
+  if (touched) return "confident"; // a human picked it — no longer a guess
+  return confidence === "fuzzy" ? "doubt" : "confident";
+}
+
+function StatusDot({ status }: { status: FieldStatus }) {
+  if (status === "empty") return null;
+  const title =
+    status === "confident"
+      ? "Mapped with high confidence"
+      : status === "doubt"
+        ? "Guessed from a partial header match — please double-check"
+        : "Required — needs to be mapped";
+  return <span className={`mapping-status-dot mapping-status-${status}`} title={title} />;
+}
 import { BrandLoader } from "./BrandLoader";
 
 interface Props {
@@ -40,19 +64,31 @@ export function MappingScreen({ suggestion, drifted, onConfirm, onCancel, submit
     label: columnLabel(grid, headerRowStart, headerRowEnd, i),
   }));
 
+  // Fields the user has explicitly touched — once they've picked a column
+  // themselves, that choice is certain regardless of what the auto-suggester
+  // guessed, so it should read as confident (green) rather than a lingering
+  // "fuzzy" (amber) or blank "missing" (red) status.
+  const [touched, setTouched] = useState<Set<CanonicalField>>(new Set());
+  function markTouched(field: CanonicalField) {
+    setTouched((prev) => (prev.has(field) ? prev : new Set(prev).add(field)));
+  }
+
   const assignedElsewhere = (field: CanonicalField, index: number) =>
     Object.entries(assignments).some(([f, idxs]) => f !== field && (idxs ?? []).includes(index));
 
   function setTextField(field: CanonicalField, index: number | null) {
     setAssignments((prev) => ({ ...prev, [field]: index === null ? [] : [index] }));
+    markTouched(field);
   }
 
   function addNumericColumn(field: CanonicalField, index: number) {
     setAssignments((prev) => ({ ...prev, [field]: [...(prev[field] ?? []), index] }));
+    markTouched(field);
   }
 
   function removeNumericColumn(field: CanonicalField, index: number) {
     setAssignments((prev) => ({ ...prev, [field]: (prev[field] ?? []).filter((i) => i !== index) }));
+    markTouched(field);
   }
 
   const employeeCodeSet = (assignments.employeeCode ?? []).length > 0;
@@ -91,9 +127,13 @@ export function MappingScreen({ suggestion, drifted, onConfirm, onCancel, submit
               const isNumeric = NUMERIC_SET.has(field);
               const current = assignments[field] ?? [];
               const missingRequired = REQUIRED.has(field) && current.length === 0;
+              const status = statusOf(current.length > 0, REQUIRED.has(field), touched.has(field), suggestion.confidence[field]);
               return (
                 <div key={field} className={`mapping-row ${missingRequired ? "mapping-row-missing" : ""}`}>
-                  <label className="mapping-field-label">{FIELD_LABELS[field]}</label>
+                  <label className="mapping-field-label">
+                    <StatusDot status={status} />
+                    {FIELD_LABELS[field]}
+                  </label>
                   {isNumeric ? (
                     <div className="mapping-chips">
                       {current.map((idx) => (
