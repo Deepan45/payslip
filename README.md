@@ -19,7 +19,41 @@ Payslip/
   frontend/    React admin portal
 ```
 
-## 1. Backend setup
+## Quick start with Docker
+
+The easiest way to run the whole stack (Postgres + API + frontend) is with
+Docker Compose — no local Node/Postgres install needed.
+
+```bash
+docker compose up --build
+```
+
+This starts three containers: `db` (Postgres 16), `backend` (API on
+[http://localhost:4000](http://localhost:4000), migrations applied
+automatically on boot), and `frontend` (nginx serving the built app on
+[http://localhost:8080](http://localhost:8080), proxying `/api` to the
+backend so there's no CORS to configure).
+
+First time only, create the admin login:
+
+```bash
+docker compose exec backend node dist/seed.js
+```
+
+Then open [http://localhost:8080](http://localhost:8080) and log in with
+`admin@example.com` / `ChangeMe123!` (from the default env values in
+`docker-compose.yml` — change `JWT_SECRET`, `SEED_ADMIN_EMAIL` and
+`SEED_ADMIN_PASSWORD` there before using this for anything real). Uploaded
+payslip PDFs and logos persist in the `backend-storage` volume; Postgres
+data persists in `db-data`. `docker compose down` stops everything;
+add `-v` to also wipe those volumes.
+
+To rebuild after code changes: `docker compose up --build`. To run each
+service's Dockerfile standalone (e.g. against an existing Postgres), see
+`backend/Dockerfile` and `frontend/Dockerfile` — both take the same
+environment variables described below / in `.env.example`.
+
+## 1. Backend setup (without Docker)
 
 ```bash
 cd backend
@@ -34,7 +68,7 @@ The seed script creates an admin using `SEED_ADMIN_EMAIL` /
 `SEED_ADMIN_PASSWORD` from `.env` (defaults to `admin@example.com` /
 `ChangeMe123!` — **change this before going live**).
 
-## 2. Frontend setup
+## 2. Frontend setup (without Docker)
 
 ```bash
 cd frontend
