@@ -129,7 +129,7 @@ pipeline {
                       -e JWT_SECRET="${JWT_SECRET}" \
                       -e JWT_EXPIRES_IN="8h" \
                       -e PORT=4000 \
-                      -e CORS_ORIGIN="http://${PUBLIC_HOST}:${FRONTEND_PORT}" \
+                      -e CORS_ORIGIN="*" \
                       -e PUBLIC_BASE_URL="http://${PUBLIC_HOST}:${FRONTEND_PORT}" \
                       -e SEED_ADMIN_EMAIL="${SEED_ADMIN_EMAIL}" \
                       -e SEED_ADMIN_PASSWORD="${SEED_ADMIN_PASSWORD}" \

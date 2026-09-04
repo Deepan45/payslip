@@ -25,7 +25,12 @@ const LOCALHOST_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/;
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || env.corsOrigin.includes(origin) || LOCALHOST_ORIGIN.test(origin)) {
+      if (
+        !origin ||
+        env.corsOrigin.includes("*") ||
+        env.corsOrigin.includes(origin) ||
+        LOCALHOST_ORIGIN.test(origin)
+      ) {
         return callback(null, true);
       }
       callback(new Error(`Origin ${origin} not allowed by CORS`));
