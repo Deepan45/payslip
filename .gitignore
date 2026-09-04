@@ -1,0 +1,8 @@
+# Real employee salary sheets — contains PII (names, bank accounts, wages).
+# Never commit; used locally only to test uploads.
+Demo-Excel/
+
+node_modules/
+dist/
+.env
+*.log

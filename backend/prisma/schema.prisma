@@ -1,0 +1,169 @@
+// Prisma schema for the Salary Slip system — modeled for a manpower/staffing
+// company: employees are deployed at client sites, salary sheets are
+// uploaded per (client, period), and each client's Excel layout is
+// remembered via a saved column-mapping profile (see SiteColumnProfile).
+//
+// Postgres (hosted) is the datasource; see .env for DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model CompanySettings {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  logoPath  String?
+  mobile    String?
+  officePhone String?
+  email     String?
+  website   String?
+  updatedAt DateTime @updatedAt
+}
+
+/// A client site the manpower company deploys workers to (e.g. "Imperial
+/// Auto", "Victura Automotive"). This is the central entity distinguishing
+/// a staffing company from a single-company payroll tool.
+model Client {
+  id            String              @id @default(cuid())
+  name          String              @unique
+  address       String?
+  contactPerson String?
+  contactPhone  String?
+  contactEmail  String?
+  billingRate   Float? // optional per-employee billing/markup rate, for future client invoicing
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  salarySheets  SalarySheet[]
+  employees     Employee[] // employees currently deployed here (denormalized convenience pointer)
+  columnProfile SiteColumnProfile?
+}
+
+/// Saved Excel column mapping for one client's sheet layout, built once via
+/// the mapping screen and reused on every later upload for that client.
+/// `mapping` is a JSON object: { [canonicalField]: { columnIndex, headerText } }.
+/// `headerText` is a fingerprint — if the column at `columnIndex` no longer
+/// has a matching header on a later upload, the parser flags it for
+/// re-mapping instead of silently reading the wrong column.
+model SiteColumnProfile {
+  id        String   @id @default(cuid())
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId  String   @unique
+  headerRow Int // 0-based row index in the sheet treated as the header row
+  mapping   Json
+  updatedAt DateTime @updatedAt
+}
+
+model Employee {
+  id                 String         @id @default(cuid())
+  employeeCode       String         @unique
+  name               String
+  guardianName       String?
+  gender             String?
+  designation        String?
+  department         String?
+  bankAccount        String?
+  ifscCode           String?
+  uanNo              String?
+  esiNo              String?
+  email              String?
+  phone              String? // for WhatsApp / SMS payslip delivery
+  currentClient      Client?        @relation(fields: [currentClientId], references: [id])
+  currentClientId    String?
+  portalPasswordHash String? // set once self-service portal access is enabled for this employee
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  salaryRecords      SalaryRecord[]
+  advanceEntries     AdvanceEntry[]
+}
+
+model SalarySheet {
+  id            String         @id @default(cuid())
+  client        Client         @relation(fields: [clientId], references: [id])
+  clientId      String
+  fileName      String
+  periodMonth   Int
+  periodYear    Int
+  uploadedAt    DateTime       @default(now())
+  recordCount   Int            @default(0)
+  salaryRecords SalaryRecord[]
+
+  @@index([clientId, periodYear, periodMonth])
+}
+
+model SalaryRecord {
+  id              String        @id @default(cuid())
+  sheet           SalarySheet   @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  sheetId         String
+  employee        Employee      @relation(fields: [employeeId], references: [id])
+  employeeId      String
+
+  paidDays        Float         @default(0)
+  otHours         Float         @default(0)
+  otAmount        Float         @default(0)
+
+  basic           Float         @default(0)
+  hra             Float         @default(0)
+  incentive       Float         @default(0)
+  grossEarnings   Float         @default(0)
+
+  esi             Float         @default(0)
+  epf             Float         @default(0)
+  lwf             Float         @default(0)
+  advance         Float         @default(0)
+  dressShoes      Float         @default(0)
+  otherDeduction  Float         @default(0)
+  totalDeductions Float         @default(0)
+
+  netPay          Float         @default(0)
+  extra           Json?
+  payslip         Payslip?
+  advanceEntry    AdvanceEntry? // auto-created RECOVERED entry when `advance` > 0
+
+  @@unique([sheetId, employeeId])
+}
+
+model Payslip {
+  id             String       @id @default(cuid())
+  salaryRecord   SalaryRecord @relation(fields: [salaryRecordId], references: [id], onDelete: Cascade)
+  salaryRecordId String       @unique
+  pdfPath        String
+  generatedAt    DateTime     @default(now())
+  emailedAt      DateTime?
+  whatsappedAt   DateTime?
+}
+
+enum AdvanceEntryType {
+  ISSUED
+  RECOVERED
+}
+
+/// Running advance ledger per employee: manual ISSUED entries (cash advance
+/// given outside payroll) plus automatic RECOVERED entries created whenever
+/// a salary record deducts an "Advance" amount during payslip generation.
+model AdvanceEntry {
+  id             String           @id @default(cuid())
+  employee       Employee         @relation(fields: [employeeId], references: [id])
+  employeeId     String
+  type           AdvanceEntryType
+  amount         Float
+  date           DateTime         @default(now())
+  note           String?
+  salaryRecord   SalaryRecord?    @relation(fields: [salaryRecordId], references: [id])
+  salaryRecordId String?          @unique
+  createdAt      DateTime         @default(now())
+
+  @@index([employeeId, date])
+}
