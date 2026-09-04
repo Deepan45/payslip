@@ -25,6 +25,8 @@ export function Employees() {
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   function load() {
     setLoading(true);
@@ -43,10 +45,55 @@ export function Employees() {
     try {
       await api.delete(`/employees/${emp.id}`);
       setEmployees((prev) => prev.filter((e) => e.id !== emp.id));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(emp.id);
+        return next;
+      });
     } catch (err) {
       setError(apiErrorMessage(err, "Failed to delete employee"));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllOnPage(rows: Employee[], checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const r of rows) {
+        if (checked) next.add(r.id);
+        else next.delete(r.id);
+      }
+      return next;
+    });
+  }
+
+  async function handleDeleteSelected() {
+    if (selected.size === 0) return;
+    if (!window.confirm(`Delete ${selected.size} selected employee(s)? Any with payslip or advance history will be skipped.`)) return;
+    setError(null);
+    setBulkDeleting(true);
+    try {
+      const res = await api.post("/employees/delete", { ids: Array.from(selected) });
+      const { deleted, blocked } = res.data as { deleted: string[]; blocked: { id: string; error: string }[] };
+      setEmployees((prev) => prev.filter((e) => !deleted.includes(e.id)));
+      setSelected(new Set());
+      if (blocked.length > 0) {
+        setError(`Deleted ${deleted.length}. Skipped ${blocked.length}: ${blocked.map((b) => b.error).join(" ")}`);
+      }
+    } catch (err) {
+      setError(apiErrorMessage(err, "Failed to delete selected employees"));
+    } finally {
+      setBulkDeleting(false);
     }
   }
 
@@ -66,6 +113,7 @@ export function Employees() {
   }
 
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const allOnPageSelected = pageRows.length > 0 && pageRows.every((r) => selected.has(r.id));
 
   return (
     <div>
@@ -80,7 +128,14 @@ export function Employees() {
             onChange={(e) => handleSearch(e.target.value)}
             style={{ maxWidth: 360, margin: 0 }}
           />
-          {!loading && <span className="muted small">{filtered.length} of {employees.length} employees</span>}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {selected.size > 0 && (
+              <ActionButton icon="delete" tone="danger" disabled={bulkDeleting} onClick={handleDeleteSelected}>
+                {bulkDeleting ? "Deleting..." : `Delete ${selected.size} Selected`}
+              </ActionButton>
+            )}
+            {!loading && <span className="muted small">{filtered.length} of {employees.length} employees</span>}
+          </div>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
@@ -95,6 +150,9 @@ export function Employees() {
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: 32 }}>
+                      <input type="checkbox" checked={allOnPageSelected} onChange={(ev) => toggleAllOnPage(pageRows, ev.target.checked)} />
+                    </th>
                     <th>Employee ID</th>
                     <th>Name</th>
                     <th>Designation</th>
@@ -106,6 +164,9 @@ export function Employees() {
                 <tbody>
                   {pageRows.map((e) => (
                     <tr key={e.id}>
+                      <td>
+                        <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggleOne(e.id)} />
+                      </td>
                       <td>{e.employeeCode}</td>
                       <td>
                         <div className="name-cell">

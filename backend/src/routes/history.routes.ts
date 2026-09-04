@@ -100,14 +100,15 @@ historyRouter.post("/:sheetId/records/delete", requireAuth, async (req, res) => 
   res.json({ deleted: records.length });
 });
 
-// Delete an entire uploaded sheet — every payslip in it, and the sheet
-// itself. Does not touch the employees or client it referenced.
-historyRouter.delete("/:sheetId", requireAuth, async (req, res) => {
+// Deletes one uploaded sheet — every payslip in it, and the sheet itself.
+// Does not touch the employees or client it referenced. Shared by the
+// single-delete route and the bulk one below.
+async function deleteSheet(sheetId: string): Promise<{ ok: true } | { ok: false }> {
   const sheet = await prisma.salarySheet.findUnique({
-    where: { id: req.params.sheetId },
+    where: { id: sheetId },
     select: { id: true, salaryRecords: { select: { id: true } } },
   });
-  if (!sheet) return res.status(404).json({ error: "Sheet not found" });
+  if (!sheet) return { ok: false };
 
   await deleteSalaryRecordsCascade(sheet.salaryRecords.map((r) => r.id));
   await prisma.salarySheet.delete({ where: { id: sheet.id } });
@@ -116,5 +117,31 @@ historyRouter.delete("/:sheetId", requireAuth, async (req, res) => {
   // deleteSalaryRecordsCascade missed, e.g. from a record already gone).
   fs.rm(path.join(PAYSLIP_STORAGE_DIR, sheet.id), { recursive: true, force: true }, () => {});
 
+  return { ok: true };
+}
+
+historyRouter.delete("/:sheetId", requireAuth, async (req, res) => {
+  const result = await deleteSheet(req.params.sheetId);
+  if (!result.ok) return res.status(404).json({ error: "Sheet not found" });
   res.json({ ok: true });
+});
+
+// Bulk delete: removes every given sheet (each has no dependents to be
+// "blocked" by — a sheet is a self-contained upload batch), and reports
+// which ids didn't correspond to a real sheet.
+historyRouter.post("/delete", requireAuth, async (req, res) => {
+  const { sheetIds } = req.body as { sheetIds?: string[] };
+  if (!Array.isArray(sheetIds) || sheetIds.length === 0) {
+    return res.status(400).json({ error: "sheetIds must be a non-empty array" });
+  }
+
+  const deleted: string[] = [];
+  const notFound: string[] = [];
+  for (const id of sheetIds) {
+    const result = await deleteSheet(id);
+    if (result.ok) deleted.push(id);
+    else notFound.push(id);
+  }
+
+  res.json({ deleted, notFound });
 });

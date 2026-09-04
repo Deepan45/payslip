@@ -27,6 +27,8 @@ export function Clients() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   function load() {
     setLoading(true);
@@ -45,10 +47,48 @@ export function Clients() {
     try {
       await api.delete(`/clients/${c.id}`);
       setClients((prev) => prev.filter((x) => x.id !== c.id));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(c.id);
+        return next;
+      });
     } catch (err) {
       setError(apiErrorMessage(err, "Failed to delete client"));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll(checked: boolean) {
+    setSelected(checked ? new Set(clients.map((c) => c.id)) : new Set());
+  }
+
+  async function handleDeleteSelected() {
+    if (selected.size === 0) return;
+    if (!window.confirm(`Delete ${selected.size} selected client(s)? Any with employees or uploaded sheets will be skipped.`)) return;
+    setError(null);
+    setBulkDeleting(true);
+    try {
+      const res = await api.post("/clients/delete", { ids: Array.from(selected) });
+      const { deleted, blocked } = res.data as { deleted: string[]; blocked: { id: string; error: string }[] };
+      setClients((prev) => prev.filter((c) => !deleted.includes(c.id)));
+      setSelected(new Set());
+      if (blocked.length > 0) {
+        setError(`Deleted ${deleted.length}. Skipped ${blocked.length}: ${blocked.map((b) => b.error).join(" ")}`);
+      }
+    } catch (err) {
+      setError(apiErrorMessage(err, "Failed to delete selected clients"));
+    } finally {
+      setBulkDeleting(false);
     }
   }
 
@@ -89,9 +129,16 @@ export function Clients() {
             </span>
             <h2 style={{ margin: 0 }}>All Clients</h2>
           </div>
-          <button className="btn-primary" onClick={() => setShowForm((s) => !s)}>
-            {showForm ? "Cancel" : "+ Add Client"}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {selected.size > 0 && (
+              <ActionButton icon="delete" tone="danger" disabled={bulkDeleting} onClick={handleDeleteSelected}>
+                {bulkDeleting ? "Deleting..." : `Delete ${selected.size} Selected`}
+              </ActionButton>
+            )}
+            <button className="btn-primary" onClick={() => setShowForm((s) => !s)}>
+              {showForm ? "Cancel" : "+ Add Client"}
+            </button>
+          </div>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
@@ -131,6 +178,9 @@ export function Clients() {
             <table>
               <thead>
                 <tr>
+                  <th style={{ width: 32 }}>
+                    <input type="checkbox" checked={clients.length > 0 && selected.size === clients.length} onChange={(e) => toggleAll(e.target.checked)} />
+                  </th>
                   <th>Name</th>
                   <th>Contact</th>
                   <th className="num">Employees</th>
@@ -142,6 +192,9 @@ export function Clients() {
               <tbody>
                 {clients.map((c) => (
                   <tr key={c.id}>
+                    <td>
+                      <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleOne(c.id)} />
+                    </td>
                     <td>
                       <div className="name-cell">
                         <Avatar name={c.name} size={28} />
