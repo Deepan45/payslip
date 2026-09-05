@@ -46,10 +46,15 @@ companyRouter.put("/", requireAuth, async (req, res) => {
 companyRouter.post("/logo", requireAuth, upload.single("logo"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No logo file uploaded" });
 
+  // Store just the filename, not the full disk path — the full path (as
+  // written by multer) bakes in this process's environment (e.g. a
+  // container's "/app/storage/logo/..."), which breaks once read back from
+  // any other environment sharing the same DB. Whoever renders the PDF
+  // resolves the filename against its own local LOGO_DIR instead.
   const existing = await prisma.companySettings.findFirst();
   const company = existing
-    ? await prisma.companySettings.update({ where: { id: existing.id }, data: { logoPath: req.file.path } })
-    : await prisma.companySettings.create({ data: { name: "Your Company", logoPath: req.file.path } });
+    ? await prisma.companySettings.update({ where: { id: existing.id }, data: { logoPath: req.file.filename } })
+    : await prisma.companySettings.create({ data: { name: "Your Company", logoPath: req.file.filename } });
 
   res.json({ company });
 });

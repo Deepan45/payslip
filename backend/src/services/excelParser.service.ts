@@ -91,6 +91,7 @@ const HEADER_ALIASES: Record<string, CanonicalField> = {
   name: "name", empname: "name", employeename: "name", nameofemployee: "name",
 
   guardianname: "guardianName", fathersname: "guardianName", gaurdianname: "guardianName",
+  fhname: "guardianName", guardiansname: "guardianName",
 
   gender: "gender", genger: "gender",
 
@@ -114,6 +115,7 @@ const HEADER_ALIASES: Record<string, CanonicalField> = {
   paiddays: "paidDays", days: "paidDays", noofpaiddays: "paidDays",
 
   othours: "otHours", othrs: "otHours", actualot: "otHours", otamount: "otAmount",
+  exthrs: "otHours", exthours: "otHours", extrahours: "otHours",
 
   basic: "basic", basicsalary: "basic", basicpay: "basic",
 
@@ -124,24 +126,28 @@ const HEADER_ALIASES: Record<string, CanonicalField> = {
 
   incentive: "incentive", incentiveamt: "incentive", goodworkaward: "incentive",
   goodworkpoints: "incentive", attendaward: "incentive", arrear: "incentive",
+  conveyance: "incentive", conveyanceallowance: "incentive", conv: "incentive",
 
   gross: "grossEarnings", grosssalary: "grossEarnings", grossearnings: "grossEarnings",
   totalgross: "grossEarnings", salaryearning: "grossEarnings", earngross: "grossEarnings",
 
   esi: "esi", esic: "esi",
   epf: "epf", pf: "epf", pfwages: "epf", providentfund: "epf",
-  lwf: "lwf",
+  lwf: "lwf", welfare: "lwf",
 
   advance: "advance", adv: "advance", advded: "advance",
 
-  dressshoes: "dressShoes", dressandshoes: "dressShoes",
+  dressshoes: "dressShoes", dressandshoes: "dressShoes", dress: "dressShoes",
 
   otherdeduction: "otherDeduction", otherdeductions: "otherDeduction",
   canteendeduction: "otherDeduction", food: "otherDeduction", lunch: "otherDeduction",
+  meal: "otherDeduction", loan: "otherDeduction", tds: "otherDeduction",
+  telephoneexp: "otherDeduction", telephoneexpense: "otherDeduction",
 
   totaldeduction: "totalDeductions", totaldeductions: "totalDeductions", tded: "totalDeductions",
 
-  netpay: "netPay", netsalary: "netPay", npay: "netPay", netpayable: "netPay", takehome: "netPay",
+  netpay: "netPay", netsalary: "netPay", nettsalary: "netPay", npay: "netPay",
+  netpayable: "netPay", takehome: "netPay",
 };
 
 function normalizeHeader(raw: unknown): string {
@@ -178,7 +184,17 @@ export interface AliasMatch {
  *     Words under 3 letters are skipped here (only as a whole-header exact
  *     match) to avoid short fragments like "no" or "id" firing on unrelated
  *     headers; the longest matching word wins if more than one word hits.
+ *     A few words are skipped here even at length >= 3 (see
+ *     WORD_MATCH_BLOCKLIST) because they're generic enough to appear inside
+ *     other fields' real headers — "name" alone would otherwise fuzzy-match
+ *     "F/H Name" or "Guardian's Name" to the employee-name field, silently
+ *     stealing that column and leaving guardianName with no candidate at
+ *     all. Every legitimate whole-header spelling of "the employee's name"
+ *     ("Name", "Employee Name", "Name of Employee", ...) already has its
+ *     own exact alias above, so this fallback isn't needed for real hits.
  */
+const WORD_MATCH_BLOCKLIST = new Set<string>(["name"]);
+
 function lookupAlias(text: string): AliasMatch | undefined {
   const norm = normalizeHeader(text);
   if (!norm) return undefined;
@@ -189,7 +205,7 @@ function lookupAlias(text: string): AliasMatch | undefined {
   let best: CanonicalField | undefined;
   let bestLen = 0;
   for (const word of normalizeWords(text)) {
-    if (word.length < 3) continue;
+    if (word.length < 3 || WORD_MATCH_BLOCKLIST.has(word)) continue;
     const field = HEADER_ALIASES[word];
     if (field && word.length > bestLen) {
       best = field;
