@@ -65,6 +65,7 @@ export interface PayslipPdfData {
     incentive: number;
     otAmount: number;
     grossEarnings: number;
+    pfSalaryAmt: number;
   };
   deductions: {
     esi: number;
@@ -131,7 +132,7 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     // === Header: logo + company block (left), PAYSLIP + period (right) ===
     const headerTop = doc.y;
     let logoDrawn = false;
-    const LOGO_SIZE = 100;
+    const LOGO_SIZE = 90;
     if (data.company.logoPath && fs.existsSync(data.company.logoPath)) {
       try {
         doc.image(data.company.logoPath, PAGE_LEFT, headerTop, { width: LOGO_SIZE, height: LOGO_SIZE, fit: [LOGO_SIZE, LOGO_SIZE] });
@@ -229,6 +230,10 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
       ["Pay Period", `${MONTH_NAMES[data.period.month - 1]} ${data.period.year}`],
       ["Deployed At", data.client.name],
       ["Paid Days", `${data.attendance.paidDays}${data.attendance.otHours ? `  (OT ${data.attendance.otHours} hrs)` : ""}`],
+      // Informational only — the PF-qualifying wage base, not an additional
+      // earning. Kept out of the summed Earnings table below so it never
+      // gets added into Total Earnings / Gross / Net Pay.
+      ["PF Salary Amt", `Rs. ${formatCurrency(data.earnings.pfSalaryAmt)}`],
     ];
 
     const detailsTop = doc.y;

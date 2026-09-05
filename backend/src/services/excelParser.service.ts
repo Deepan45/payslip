@@ -40,6 +40,7 @@ export type NumericField =
   | "hra"
   | "incentive"
   | "grossEarnings"
+  | "pfSalaryAmt"
   | "esi"
   | "epf"
   | "lwf"
@@ -57,7 +58,7 @@ export const TEXT_FIELDS: TextField[] = [
 ];
 
 export const NUMERIC_FIELDS: NumericField[] = [
-  "paidDays", "otHours", "otAmount", "basic", "hra", "incentive", "grossEarnings",
+  "paidDays", "otHours", "otAmount", "basic", "hra", "incentive", "grossEarnings", "pfSalaryAmt",
   "esi", "epf", "lwf", "advance", "dressShoes", "otherDeduction", "totalDeductions", "netPay",
 ];
 
@@ -90,6 +91,7 @@ const HEADER_ALIASES: Record<string, CanonicalField> = {
   name: "name", empname: "name", employeename: "name", nameofemployee: "name",
 
   guardianname: "guardianName", fathersname: "guardianName", gaurdianname: "guardianName",
+  fhname: "guardianName", guardiansname: "guardianName",
 
   gender: "gender", genger: "gender",
 
@@ -113,31 +115,40 @@ const HEADER_ALIASES: Record<string, CanonicalField> = {
   paiddays: "paidDays", days: "paidDays", noofpaiddays: "paidDays",
 
   othours: "otHours", othrs: "otHours", actualot: "otHours", otamount: "otAmount",
+  exthrs: "otHours", exthours: "otHours", extrahours: "otHours",
 
   basic: "basic", basicsalary: "basic", basicpay: "basic",
+
+  pfsalaryamt: "pfSalaryAmt", pfsalary: "pfSalaryAmt", pfsalaryamount: "pfSalaryAmt",
+  pfbasicwages: "pfSalaryAmt", pfqualifyingwages: "pfSalaryAmt", pfwagebasis: "pfSalaryAmt",
+  pfwages: "pfSalaryAmt",
 
   hra: "hra", houserentallowance: "hra",
 
   incentive: "incentive", incentiveamt: "incentive", goodworkaward: "incentive",
   goodworkpoints: "incentive", attendaward: "incentive", arrear: "incentive",
+  conveyance: "incentive", conveyanceallowance: "incentive", conv: "incentive",
 
   gross: "grossEarnings", grosssalary: "grossEarnings", grossearnings: "grossEarnings",
   totalgross: "grossEarnings", salaryearning: "grossEarnings", earngross: "grossEarnings",
 
   esi: "esi", esic: "esi",
-  epf: "epf", pf: "epf", pfwages: "epf", providentfund: "epf",
-  lwf: "lwf",
+  epf: "epf", pf: "epf", providentfund: "epf",
+  lwf: "lwf", welfare: "lwf",
 
-  advance: "advance", adv: "advance", advded: "advance",
+  advance: "advance", adv: "advance", advded: "advance", advanceamount: "advance", advamount: "advance",
 
-  dressshoes: "dressShoes", dressandshoes: "dressShoes",
+  dressshoes: "dressShoes", dressandshoes: "dressShoes", dress: "dressShoes",
 
   otherdeduction: "otherDeduction", otherdeductions: "otherDeduction",
   canteendeduction: "otherDeduction", food: "otherDeduction", lunch: "otherDeduction",
+  meal: "otherDeduction", loan: "otherDeduction", tds: "otherDeduction",
+  telephoneexp: "otherDeduction", telephoneexpense: "otherDeduction",
 
   totaldeduction: "totalDeductions", totaldeductions: "totalDeductions", tded: "totalDeductions",
 
-  netpay: "netPay", netsalary: "netPay", npay: "netPay", netpayable: "netPay", takehome: "netPay",
+  netpay: "netPay", netsalary: "netPay", nettsalary: "netPay", npay: "netPay",
+  netpayable: "netPay", takehome: "netPay",
 };
 
 function normalizeHeader(raw: unknown): string {
@@ -174,7 +185,30 @@ export interface AliasMatch {
  *     Words under 3 letters are skipped here (only as a whole-header exact
  *     match) to avoid short fragments like "no" or "id" firing on unrelated
  *     headers; the longest matching word wins if more than one word hits.
+ *     A few words are skipped here even at length >= 3 (see
+ *     WORD_MATCH_BLOCKLIST) because they're generic enough to appear inside
+ *     other fields' real headers — "name" alone would otherwise fuzzy-match
+ *     "F/H Name" or "Guardian's Name" to the employee-name field, silently
+ *     stealing that column and leaving guardianName with no candidate at
+ *     all. Every legitimate whole-header spelling of "the employee's name"
+ *     ("Name", "Employee Name", "Name of Employee", ...) already has its
+ *     own exact alias above, so this fallback isn't needed for real hits.
+ *     Same story for "adv"/"advance": real sheets pair an amount column
+ *     ("ADV Ded", "ADV.") with an unrelated metadata column ("ADV DATE",
+ *     "Advance Date") — fuzzy-matching either word inside the latter would
+ *     offer a date-serial column as the advance *amount*. Both abbreviated
+ *     and full-word forms show up across real sheets, so both are blocked
+ *     here. "ADV." / "Advance" alone still hit the exact whole-header match
+ *     above, so this only removes the dangerous compound-header case, not
+ *     real single-word headers.
+ *     And "dress": a real sheet pairs a "DRESS & SHOES" deduction with a
+ *     separately-tracked "DRESS & SHOES PAYBLE" reimbursement column — the
+ *     latter fuzzy-matches "dress" and would otherwise get picked over the
+ *     actual (exact-matching) deduction column, showing a payable/refund
+ *     figure as if it were the deduction.
  */
+const WORD_MATCH_BLOCKLIST = new Set<string>(["name", "adv", "advance", "dress"]);
+
 function lookupAlias(text: string): AliasMatch | undefined {
   const norm = normalizeHeader(text);
   if (!norm) return undefined;
@@ -185,7 +219,7 @@ function lookupAlias(text: string): AliasMatch | undefined {
   let best: CanonicalField | undefined;
   let bestLen = 0;
   for (const word of normalizeWords(text)) {
-    if (word.length < 3) continue;
+    if (word.length < 3 || WORD_MATCH_BLOCKLIST.has(word)) continue;
     const field = HEADER_ALIASES[word];
     if (field && word.length > bestLen) {
       best = field;
@@ -286,9 +320,28 @@ export function suggestColumnMapping(grid: unknown[][]): MappingSuggestion {
   // only meaningful during suggestion — a saved ColumnMapping doesn't carry it.
   const matchConfidence: Partial<Record<CanonicalField, Map<number, MatchConfidence>>> = {};
   for (let c = 0; c < cols; c++) {
-    const rowsInBlock = [cellText(grid[headerRowStart], c), cellText(grid[headerRowEnd], c)];
-    for (const text of rowsInBlock) {
-      const match = lookupAlias(text);
+    const topText = cellText(grid[headerRowStart], c);
+    const subText = cellText(grid[headerRowEnd], c);
+    const topMatch = topText ? lookupAlias(topText) : undefined;
+    const subMatch = subText ? lookupAlias(subText) : undefined;
+
+    // When a 2-row header gives this column both a group label (top) and
+    // its own sub-label, and the two resolve to *different* fields, trust
+    // the sub-label — it's specific to this column. The group label often
+    // just names a whole section spanning many sub-columns (e.g. "SALARY
+    // EARNING" over Basic/HRA/Attend Award/.../Gross), and if that section
+    // name itself happens to alias a real field (like "Salary Earning" ->
+    // grossEarnings), every one of its sub-columns would otherwise register
+    // as a spurious candidate for that field, potentially outranking the
+    // sheet's actual, correctly-labeled total column.
+    const rowsInBlock =
+      subMatch && topMatch && subMatch.field !== topMatch.field
+        ? [{ text: subText, match: subMatch }]
+        : [
+            { text: topText, match: topMatch },
+            { text: subText, match: subMatch },
+          ];
+    for (const { match } of rowsInBlock) {
       if (!match) continue;
       const { field, confidence } = match;
       const fp = fingerprintAt(grid, headerRowStart, headerRowEnd, c);
@@ -304,7 +357,15 @@ export function suggestColumnMapping(grid: unknown[][]): MappingSuggestion {
 
   // Default selection: last candidate per field (in these real sheets, a
   // repeated label's later occurrence is consistently the "earned/actual"
-  // figure, not the base entitlement) — shown pre-selected but always
+  // figure, not the base entitlement — e.g. two "Basic" columns, or two
+  // "Gross" columns where the later one is a fuzzy match on a verbose real
+  // header while the earlier, wrong one happens to be an exact match on a
+  // differently-scoped column). Preferring exact confidence here sounds
+  // safer but isn't: it's exactly as likely to promote the wrong block's
+  // exact hit over the right block's fuzzy one. The real fix for a
+  // dangerously generic word (e.g. "adv" inside "ADV DATE") is to keep it
+  // out of the fuzzy fallback entirely — see WORD_MATCH_BLOCKLIST — not to
+  // reweight by confidence after the fact. Shown pre-selected but always
   // overridable on the mapping screen.
   const columns: Partial<Record<CanonicalField, ColumnRef[]>> = {};
   const confidence: Partial<Record<CanonicalField, MatchConfidence>> = {};
@@ -367,6 +428,7 @@ export interface ParsedSalaryRow {
   hra: number;
   incentive: number;
   grossEarnings: number;
+  pfSalaryAmt: number;
   esi: number;
   epf: number;
   lwf: number;
@@ -430,6 +492,7 @@ export function parseWithMapping(grid: unknown[][], mapping: ColumnMapping): Par
     const hra = numOf("hra", row);
     const incentive = numOf("incentive", row);
     const otAmount = numOf("otAmount", row);
+    const pfSalaryAmt = numOf("pfSalaryAmt", row);
     const esi = numOf("esi", row);
     const epf = numOf("epf", row);
     const lwf = numOf("lwf", row);
@@ -473,6 +536,7 @@ export function parseWithMapping(grid: unknown[][], mapping: ColumnMapping): Par
       hra,
       incentive,
       grossEarnings,
+      pfSalaryAmt,
       esi,
       epf,
       lwf,

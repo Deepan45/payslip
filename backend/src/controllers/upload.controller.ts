@@ -22,6 +22,20 @@ import { mapWithConcurrency } from "../utils/concurrency";
 const UPLOAD_CONCURRENCY = 20;
 
 const PAYSLIP_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "payslips");
+const LOGO_DIR = path.join(__dirname, "..", "..", "storage", "logo");
+
+// CompanySettings.logoPath was historically stored as the full absolute path
+// returned by multer at upload time (see company.routes.ts) — which bakes in
+// whatever environment wrote it (e.g. a container's "/app/storage/logo/...").
+// Read back through a *different* environment (a local dev box against the
+// same shared DB, a restored backup, etc.), that path doesn't exist on disk
+// and the logo silently disappears from every payslip. Resolve by filename
+// against this environment's own LOGO_DIR instead, so only the file itself
+// needs to exist locally — not the exact path it was uploaded from.
+function resolveLogoPath(storedPath: string | null | undefined): string | undefined {
+  if (!storedPath) return undefined;
+  return path.join(LOGO_DIR, path.basename(storedPath));
+}
 
 export function downloadSalarySheetTemplate(_req: AuthedRequest, res: Response) {
   const buffer = buildSalarySheetTemplate();
@@ -175,6 +189,7 @@ export async function uploadSalarySheet(req: AuthedRequest, res: Response) {
           hra: row.hra,
           incentive: row.incentive,
           grossEarnings: row.grossEarnings,
+          pfSalaryAmt: row.pfSalaryAmt,
           esi: row.esi,
           epf: row.epf,
           lwf: row.lwf,
@@ -207,7 +222,7 @@ export async function uploadSalarySheet(req: AuthedRequest, res: Response) {
           company: {
             name: company?.name ?? "Your Company",
             address: company?.address,
-            logoPath: company?.logoPath ?? undefined,
+            logoPath: resolveLogoPath(company?.logoPath),
             mobile: company?.mobile,
             officePhone: company?.officePhone,
             email: company?.email,
@@ -233,6 +248,7 @@ export async function uploadSalarySheet(req: AuthedRequest, res: Response) {
             incentive: row.incentive,
             otAmount: row.otAmount,
             grossEarnings: row.grossEarnings,
+            pfSalaryAmt: row.pfSalaryAmt,
           },
           deductions: {
             esi: row.esi,
