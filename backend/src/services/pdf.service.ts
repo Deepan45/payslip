@@ -366,16 +366,6 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
       .text("This is a system-generated payslip and does not require a signature.", PAGE_LEFT, footerY + 10, {
         width: 320,
       });
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .fillColor(NAVY)
-      .text(`For ${data.company.name}`, PAGE_LEFT, footerY + 32, { width: PAGE_WIDTH, align: "right" });
-    doc
-      .font("Helvetica")
-      .fontSize(8)
-      .fillColor(GRAY)
-      .text("Authorized Signatory", PAGE_LEFT, footerY + 48, { width: PAGE_WIDTH, align: "right" });
 
     doc.end();
 
