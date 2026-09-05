@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "SalaryRecord" ADD COLUMN     "pfSalaryAmt" DOUBLE PRECISION NOT NULL DEFAULT 0;

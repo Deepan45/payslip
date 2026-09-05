@@ -40,6 +40,7 @@ export type NumericField =
   | "hra"
   | "incentive"
   | "grossEarnings"
+  | "pfSalaryAmt"
   | "esi"
   | "epf"
   | "lwf"
@@ -57,7 +58,7 @@ export const TEXT_FIELDS: TextField[] = [
 ];
 
 export const NUMERIC_FIELDS: NumericField[] = [
-  "paidDays", "otHours", "otAmount", "basic", "hra", "incentive", "grossEarnings",
+  "paidDays", "otHours", "otAmount", "basic", "hra", "incentive", "grossEarnings", "pfSalaryAmt",
   "esi", "epf", "lwf", "advance", "dressShoes", "otherDeduction", "totalDeductions", "netPay",
 ];
 
@@ -115,6 +116,9 @@ const HEADER_ALIASES: Record<string, CanonicalField> = {
   othours: "otHours", othrs: "otHours", actualot: "otHours", otamount: "otAmount",
 
   basic: "basic", basicsalary: "basic", basicpay: "basic",
+
+  pfsalaryamt: "pfSalaryAmt", pfsalary: "pfSalaryAmt", pfsalaryamount: "pfSalaryAmt",
+  pfbasicwages: "pfSalaryAmt", pfqualifyingwages: "pfSalaryAmt", pfwagebasis: "pfSalaryAmt",
 
   hra: "hra", houserentallowance: "hra",
 
@@ -367,6 +371,7 @@ export interface ParsedSalaryRow {
   hra: number;
   incentive: number;
   grossEarnings: number;
+  pfSalaryAmt: number;
   esi: number;
   epf: number;
   lwf: number;
@@ -430,6 +435,7 @@ export function parseWithMapping(grid: unknown[][], mapping: ColumnMapping): Par
     const hra = numOf("hra", row);
     const incentive = numOf("incentive", row);
     const otAmount = numOf("otAmount", row);
+    const pfSalaryAmt = numOf("pfSalaryAmt", row);
     const esi = numOf("esi", row);
     const epf = numOf("epf", row);
     const lwf = numOf("lwf", row);
@@ -473,6 +479,7 @@ export function parseWithMapping(grid: unknown[][], mapping: ColumnMapping): Par
       hra,
       incentive,
       grossEarnings,
+      pfSalaryAmt,
       esi,
       epf,
       lwf,

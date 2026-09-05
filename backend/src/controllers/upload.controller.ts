@@ -175,6 +175,7 @@ export async function uploadSalarySheet(req: AuthedRequest, res: Response) {
           hra: row.hra,
           incentive: row.incentive,
           grossEarnings: row.grossEarnings,
+          pfSalaryAmt: row.pfSalaryAmt,
           esi: row.esi,
           epf: row.epf,
           lwf: row.lwf,
@@ -233,6 +234,7 @@ export async function uploadSalarySheet(req: AuthedRequest, res: Response) {
             incentive: row.incentive,
             otAmount: row.otAmount,
             grossEarnings: row.grossEarnings,
+            pfSalaryAmt: row.pfSalaryAmt,
           },
           deductions: {
             esi: row.esi,

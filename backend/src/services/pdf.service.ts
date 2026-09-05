@@ -65,6 +65,7 @@ export interface PayslipPdfData {
     incentive: number;
     otAmount: number;
     grossEarnings: number;
+    pfSalaryAmt: number;
   };
   deductions: {
     esi: number;
@@ -262,6 +263,7 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     // === Earnings / Deductions table ===
     const earningsRows: [string, number][] = [
       ["Basic Pay", data.earnings.basic],
+      ["PF Salary Amt", data.earnings.pfSalaryAmt],
       ["House Rent Allowance (HRA)", data.earnings.hra],
       ["Incentive / Other Earnings", data.earnings.incentive],
       ["OT Amount", data.earnings.otAmount],

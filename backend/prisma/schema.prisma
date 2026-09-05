@@ -119,6 +119,7 @@ model SalaryRecord {
   hra             Float         @default(0)
   incentive       Float         @default(0)
   grossEarnings   Float         @default(0)
+  pfSalaryAmt     Float         @default(0) // PF-qualifying wage base, shown alongside Basic on the payslip
 
   esi             Float         @default(0)
   epf             Float         @default(0)
