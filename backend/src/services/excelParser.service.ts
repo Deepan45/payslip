@@ -37,6 +37,7 @@ export type NumericField =
   | "otHours"
   | "otAmount"
   | "basic"
+  | "monthlySalary"
   | "hra"
   | "incentive"
   | "grossEarnings"
@@ -58,7 +59,7 @@ export const TEXT_FIELDS: TextField[] = [
 ];
 
 export const NUMERIC_FIELDS: NumericField[] = [
-  "paidDays", "otHours", "otAmount", "basic", "hra", "incentive", "grossEarnings", "pfSalaryAmt",
+  "paidDays", "otHours", "otAmount", "basic", "monthlySalary", "hra", "incentive", "grossEarnings", "pfSalaryAmt",
   "esi", "epf", "lwf", "advance", "dressShoes", "otherDeduction", "totalDeductions", "netPay",
 ];
 
@@ -118,6 +119,10 @@ const HEADER_ALIASES: Record<string, CanonicalField> = {
   exthrs: "otHours", exthours: "otHours", extrahours: "otHours",
 
   basic: "basic", basicsalary: "basic", basicpay: "basic",
+  earnedsalary: "basic", earnedbasic: "basic", actualbasic: "basic", earnedwages: "basic",
+
+  monthlysalary: "monthlySalary", monthlybasic: "monthlySalary", basicmonthly: "monthlySalary",
+  monthlybasicsalary: "monthlySalary", fullbasic: "monthlySalary", basicentitlement: "monthlySalary",
 
   pfsalaryamt: "pfSalaryAmt", pfsalary: "pfSalaryAmt", pfsalaryamount: "pfSalaryAmt",
   pfbasicwages: "pfSalaryAmt", pfqualifyingwages: "pfSalaryAmt", pfwagebasis: "pfSalaryAmt",
@@ -428,6 +433,13 @@ function toNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** One source column that was folded into the summed `incentive` field, kept individually
+ *  (label + its own amount) so the payslip can list other earnings separately. */
+export interface OtherEarningItem {
+  label: string;
+  amount: number;
+}
+
 export interface ParsedSalaryRow {
   employeeCode: string;
   name: string;
@@ -445,8 +457,13 @@ export interface ParsedSalaryRow {
   otHours: number;
   otAmount: number;
   basic: number;
+  /** Full monthly entitlement (unprorated) — reference only, shown alongside
+   *  `basic` (the actual/earned figure for days paid) but never summed into
+   *  Gross Earnings / Net Pay. */
+  monthlySalary: number;
   hra: number;
   incentive: number;
+  otherEarnings: OtherEarningItem[];
   grossEarnings: number;
   pfSalaryAmt: number;
   esi: number;
@@ -509,8 +526,20 @@ export function parseWithMapping(grid: unknown[][], mapping: ColumnMapping): Par
     }
 
     const basic = numOf("basic", row);
+    const monthlySalary = numOf("monthlySalary", row);
     const hra = numOf("hra", row);
     const incentive = numOf("incentive", row);
+    // Same source columns as `incentive`, but kept as individual label+amount
+    // entries (instead of only their sum) so the payslip can list each other
+    // earning — Arrear, Conveyance, Good Work Award, etc. — as its own line.
+    // Zero-value columns are dropped so a payslip doesn't list an earning an
+    // employee didn't receive that month.
+    const otherEarnings: OtherEarningItem[] = (mapping.columns.incentive ?? [])
+      .map((ref) => ({
+        label: ref.fingerprint.split(">").pop()?.trim() || `Column ${ref.index + 1}`,
+        amount: toNumber(row[ref.index]),
+      }))
+      .filter((item) => item.amount !== 0);
     const otAmount = numOf("otAmount", row);
     const pfSalaryAmt = numOf("pfSalaryAmt", row);
     const esi = numOf("esi", row);
@@ -553,8 +582,10 @@ export function parseWithMapping(grid: unknown[][], mapping: ColumnMapping): Par
       otHours: numOf("otHours", row),
       otAmount,
       basic,
+      monthlySalary,
       hra,
       incentive,
+      otherEarnings,
       grossEarnings,
       pfSalaryAmt,
       esi,
