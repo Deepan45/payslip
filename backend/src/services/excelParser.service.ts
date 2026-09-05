@@ -276,6 +276,15 @@ function scoreHeaderBlock(grid: unknown[][], startRow: number, cols: number): nu
   return score;
 }
 
+/** Whether `row` has at least one cell that matches a known alias on its own. */
+function rowHasAnyAliasMatch(grid: unknown[][], row: number, cols: number): boolean {
+  for (let c = 0; c < cols; c++) {
+    const t = cellText(grid[row], c);
+    if (t && lookupAlias(t)) return true;
+  }
+  return false;
+}
+
 export interface MappingSuggestion {
   headerRowStart: number;
   headerRowEnd: number;
@@ -311,7 +320,18 @@ export function suggestColumnMapping(grid: unknown[][]): MappingSuggestion {
   }
 
   const headerRowStart = bestRow;
-  const headerRowEnd = Math.min(bestRow + 1, grid.length - 1);
+  // scoreHeaderBlock always scores a 2-row window, so a plain single-header
+  // sheet's own first DATA row (bestRow + 1) can win bestRow purely on the
+  // strength of bestRow's real header text — the pair score doesn't require
+  // the second row to contribute anything itself. Extending headerRowEnd to
+  // that row unconditionally would silently swallow that data row into the
+  // header (and with it, dataStartRow skips right past it) — exactly what
+  // happens to the very first employee in an otherwise perfectly normal
+  // sheet. Only treat bestRow + 1 as a real second header row when it has
+  // an alias match of its own; otherwise this is a single-row header.
+  const candidateSecondRow = Math.min(bestRow + 1, grid.length - 1);
+  const secondRowIsHeader = candidateSecondRow > bestRow && rowHasAnyAliasMatch(grid, candidateSecondRow, cols);
+  const headerRowEnd = secondRowIsHeader ? candidateSecondRow : headerRowStart;
   const dataStartRow = headerRowEnd + 1;
 
   const candidates: Partial<Record<CanonicalField, ColumnRef[]>> = {};
