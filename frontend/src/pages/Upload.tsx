@@ -17,6 +17,7 @@ const MONTH_NAMES = [
 interface ClientOption {
   id: string;
   name: string;
+  columnProfile: { updatedAt: string } | null;
 }
 
 interface UploadResult {
@@ -55,6 +56,7 @@ export function Upload() {
   const [filePreview, setFilePreview] = useState<unknown[][] | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [forceRemap, setForceRemap] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -115,6 +117,7 @@ export function Upload() {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("clientId", clientId);
+    if (forceRemap) formData.append("forceRemap", "true");
 
     try {
       const res = await api.post("/uploads/analyze", formData, {
@@ -198,6 +201,18 @@ export function Upload() {
                 ))}
               </select>
             </label>
+
+            {clients.find((c) => c.id === clientId)?.columnProfile && (
+              <label className="small" style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 400 }}>
+                <input
+                  type="checkbox"
+                  checked={forceRemap}
+                  onChange={(e) => setForceRemap(e.target.checked)}
+                  style={{ width: "auto" }}
+                />
+                Re-check column mapping (e.g. a field was added since this client was last mapped)
+              </label>
+            )}
 
             <label>
               Excel file (.xlsx / .xls)

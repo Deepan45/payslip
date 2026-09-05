@@ -52,7 +52,7 @@ export function downloadSalarySheetTemplate(_req: AuthedRequest, res: Response) 
  */
 export async function analyzeSalarySheet(req: AuthedRequest, res: Response) {
   const file = req.file;
-  const { clientId } = req.body as { clientId?: string };
+  const { clientId, forceRemap } = req.body as { clientId?: string; forceRemap?: string };
   if (!file) return res.status(400).json({ error: "No file uploaded. Attach an Excel file as 'file'." });
   if (!clientId) return res.status(400).json({ error: "clientId is required" });
 
@@ -67,10 +67,23 @@ export async function analyzeSalarySheet(req: AuthedRequest, res: Response) {
   if (client.columnProfile) {
     const mapping = client.columnProfile.mapping as unknown as ColumnMapping;
     const drift = checkMappingDrift(grid, mapping);
-    if (drift.ok) {
+    if (drift.ok && forceRemap !== "true") {
       return res.json({ status: "ready", mapping, preview });
     }
+    // A voluntary re-map (no header drift, just requested) starts from a
+    // fresh suggestion — so a canonical field added to the system after
+    // this client was mapped (e.g. pfSalaryAmt) shows up for review — then
+    // lets the client's already-confirmed mapping win for every field it
+    // already covers, so a manually added extra source column isn't lost
+    // just because the auto-suggester wouldn't have found it on its own.
     const suggestion = suggestColumnMapping(grid);
+    if (drift.ok) {
+      suggestion.headerRowStart = mapping.headerRowStart;
+      suggestion.headerRowEnd = mapping.headerRowEnd;
+      suggestion.dataStartRow = mapping.dataStartRow;
+      suggestion.columns = { ...suggestion.columns, ...mapping.columns };
+      return res.json({ status: "needs_mapping", suggestion, preview });
+    }
     return res.json({ status: "drift", drifted: drift.drifted, previousMapping: mapping, suggestion, preview });
   }
 
