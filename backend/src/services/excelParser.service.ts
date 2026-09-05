@@ -121,6 +121,7 @@ const HEADER_ALIASES: Record<string, CanonicalField> = {
 
   pfsalaryamt: "pfSalaryAmt", pfsalary: "pfSalaryAmt", pfsalaryamount: "pfSalaryAmt",
   pfbasicwages: "pfSalaryAmt", pfqualifyingwages: "pfSalaryAmt", pfwagebasis: "pfSalaryAmt",
+  pfwages: "pfSalaryAmt",
 
   hra: "hra", houserentallowance: "hra",
 
@@ -132,10 +133,10 @@ const HEADER_ALIASES: Record<string, CanonicalField> = {
   totalgross: "grossEarnings", salaryearning: "grossEarnings", earngross: "grossEarnings",
 
   esi: "esi", esic: "esi",
-  epf: "epf", pf: "epf", pfwages: "epf", providentfund: "epf",
+  epf: "epf", pf: "epf", providentfund: "epf",
   lwf: "lwf", welfare: "lwf",
 
-  advance: "advance", adv: "advance", advded: "advance",
+  advance: "advance", adv: "advance", advded: "advance", advanceamount: "advance", advamount: "advance",
 
   dressshoes: "dressShoes", dressandshoes: "dressShoes", dress: "dressShoes",
 
@@ -192,8 +193,21 @@ export interface AliasMatch {
  *     all. Every legitimate whole-header spelling of "the employee's name"
  *     ("Name", "Employee Name", "Name of Employee", ...) already has its
  *     own exact alias above, so this fallback isn't needed for real hits.
+ *     Same story for "adv"/"advance": real sheets pair an amount column
+ *     ("ADV Ded", "ADV.") with an unrelated metadata column ("ADV DATE",
+ *     "Advance Date") — fuzzy-matching either word inside the latter would
+ *     offer a date-serial column as the advance *amount*. Both abbreviated
+ *     and full-word forms show up across real sheets, so both are blocked
+ *     here. "ADV." / "Advance" alone still hit the exact whole-header match
+ *     above, so this only removes the dangerous compound-header case, not
+ *     real single-word headers.
+ *     And "dress": a real sheet pairs a "DRESS & SHOES" deduction with a
+ *     separately-tracked "DRESS & SHOES PAYBLE" reimbursement column — the
+ *     latter fuzzy-matches "dress" and would otherwise get picked over the
+ *     actual (exact-matching) deduction column, showing a payable/refund
+ *     figure as if it were the deduction.
  */
-const WORD_MATCH_BLOCKLIST = new Set<string>(["name"]);
+const WORD_MATCH_BLOCKLIST = new Set<string>(["name", "adv", "advance", "dress"]);
 
 function lookupAlias(text: string): AliasMatch | undefined {
   const norm = normalizeHeader(text);
@@ -306,9 +320,28 @@ export function suggestColumnMapping(grid: unknown[][]): MappingSuggestion {
   // only meaningful during suggestion — a saved ColumnMapping doesn't carry it.
   const matchConfidence: Partial<Record<CanonicalField, Map<number, MatchConfidence>>> = {};
   for (let c = 0; c < cols; c++) {
-    const rowsInBlock = [cellText(grid[headerRowStart], c), cellText(grid[headerRowEnd], c)];
-    for (const text of rowsInBlock) {
-      const match = lookupAlias(text);
+    const topText = cellText(grid[headerRowStart], c);
+    const subText = cellText(grid[headerRowEnd], c);
+    const topMatch = topText ? lookupAlias(topText) : undefined;
+    const subMatch = subText ? lookupAlias(subText) : undefined;
+
+    // When a 2-row header gives this column both a group label (top) and
+    // its own sub-label, and the two resolve to *different* fields, trust
+    // the sub-label — it's specific to this column. The group label often
+    // just names a whole section spanning many sub-columns (e.g. "SALARY
+    // EARNING" over Basic/HRA/Attend Award/.../Gross), and if that section
+    // name itself happens to alias a real field (like "Salary Earning" ->
+    // grossEarnings), every one of its sub-columns would otherwise register
+    // as a spurious candidate for that field, potentially outranking the
+    // sheet's actual, correctly-labeled total column.
+    const rowsInBlock =
+      subMatch && topMatch && subMatch.field !== topMatch.field
+        ? [{ text: subText, match: subMatch }]
+        : [
+            { text: topText, match: topMatch },
+            { text: subText, match: subMatch },
+          ];
+    for (const { match } of rowsInBlock) {
       if (!match) continue;
       const { field, confidence } = match;
       const fp = fingerprintAt(grid, headerRowStart, headerRowEnd, c);
@@ -324,7 +357,15 @@ export function suggestColumnMapping(grid: unknown[][]): MappingSuggestion {
 
   // Default selection: last candidate per field (in these real sheets, a
   // repeated label's later occurrence is consistently the "earned/actual"
-  // figure, not the base entitlement) — shown pre-selected but always
+  // figure, not the base entitlement — e.g. two "Basic" columns, or two
+  // "Gross" columns where the later one is a fuzzy match on a verbose real
+  // header while the earlier, wrong one happens to be an exact match on a
+  // differently-scoped column). Preferring exact confidence here sounds
+  // safer but isn't: it's exactly as likely to promote the wrong block's
+  // exact hit over the right block's fuzzy one. The real fix for a
+  // dangerously generic word (e.g. "adv" inside "ADV DATE") is to keep it
+  // out of the fuzzy fallback entirely — see WORD_MATCH_BLOCKLIST — not to
+  // reweight by confidence after the fact. Shown pre-selected but always
   // overridable on the mapping screen.
   const columns: Partial<Record<CanonicalField, ColumnRef[]>> = {};
   const confidence: Partial<Record<CanonicalField, MatchConfidence>> = {};
