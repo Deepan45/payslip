@@ -244,6 +244,9 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
       ["Deployed At", data.client.name],
       ["Paid Days", `${data.attendance.paidDays}`],
       ["OT Hours", `${data.attendance.otHours}`],
+      // Full monthly entitlement — reference only. The Earnings table below shows the
+      // prorated, actually-payable Basic Pay figure, which is what feeds Gross Earnings / Net Pay.
+      ["Monthly Salary", `Rs. ${formatCurrency(data.earnings.monthlySalary)}`],
     ];
 
     const detailsTop = doc.y;
@@ -256,13 +259,12 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
 
     // === Earnings / Deductions table ===
     const earningsRows: [string, number][] = [
-      // Basic Pay (the full, unprorated monthly entitlement) and Rate of Pay (its per-day
-      // equivalent) are shown for reference alongside Earning Payable — the actual,
-      // prorated-for-Paid-Days figure — but only Earning Payable is included in Total
-      // Earnings (A) / Gross Earnings / Net Pay.
-      ["Basic Pay", data.earnings.monthlySalary],
-      ["Rate of Pay", ratePerDay],
-      ["Earning Payable", data.earnings.basic],
+      // One line for Basic Pay — its per-day Rate of Pay shown inline in parentheses next to
+      // the label (matching the client's own payslip format), amount = the actual payable
+      // figure for Paid Days (data.earnings.basic), which is what feeds Total Earnings (A) /
+      // Gross Earnings / Net Pay. The full monthly entitlement is shown separately, for
+      // reference only, in Payslip Details.
+      [`Basic Pay (Rs. ${formatCurrency(ratePerDay)}/day)`, data.earnings.basic],
       ["House Rent Allowance (HRA)", data.earnings.hra],
       ["OT Amount", data.earnings.otAmount],
       ...data.earnings.otherEarnings.map(({ label, amount }): [string, number] => [label, amount]),

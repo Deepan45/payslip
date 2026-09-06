@@ -359,13 +359,25 @@ export function suggestColumnMapping(grid: unknown[][]): MappingSuggestion {
     // grossEarnings), every one of its sub-columns would otherwise register
     // as a spurious candidate for that field, potentially outranking the
     // sheet's actual, correctly-labeled total column.
+    //
+    // "Monthly Salary" is the opposite case: real sheets write it as exactly
+    // this kind of group label over a single "Basic" (or similarly generic)
+    // sub-column — that's the whole point of the field, distinguishing the
+    // full monthly entitlement from the prorated `basic` figure. Applying
+    // the "sub-label wins" rule there would silently throw the group label
+    // away and leave the column unmapped (worse, "Basic" as a sub-label
+    // would make it a candidate for `basic` itself, risking outranking the
+    // sheet's real earned-basic column). So this one group label always
+    // wins over its sub-label, rather than the reverse.
     const rowsInBlock =
-      subMatch && topMatch && subMatch.field !== topMatch.field
-        ? [{ text: subText, match: subMatch }]
-        : [
-            { text: topText, match: topMatch },
-            { text: subText, match: subMatch },
-          ];
+      topMatch?.field === "monthlySalary"
+        ? [{ text: topText, match: topMatch }]
+        : subMatch && topMatch && subMatch.field !== topMatch.field
+          ? [{ text: subText, match: subMatch }]
+          : [
+              { text: topText, match: topMatch },
+              { text: subText, match: subMatch },
+            ];
     for (const { match } of rowsInBlock) {
       if (!match) continue;
       const { field, confidence } = match;
