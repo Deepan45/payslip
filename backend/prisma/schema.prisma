@@ -116,10 +116,14 @@ model SalaryRecord {
   otAmount        Float         @default(0)
 
   basic           Float         @default(0)
+  monthlySalary   Float         @default(0) // full monthly entitlement, unprorated — reference only, not part of Gross Earnings
   hra             Float         @default(0)
   incentive       Float         @default(0)
+  otherEarnings   Json? // itemized breakdown of `incentive`'s source columns as [{ label, amount }], so the
+                        // payslip can list each other-earning column (Arrear, Conveyance, ...) separately
+                        // instead of only the summed `incentive` total
   grossEarnings   Float         @default(0)
-  pfSalaryAmt     Float         @default(0) // PF-qualifying wage base, shown alongside Basic on the payslip
+  pfSalaryAmt     Float         @default(0) // PF-qualifying wage base — kept for reporting; not shown on the payslip itself
 
   esi             Float         @default(0)
   epf             Float         @default(0)

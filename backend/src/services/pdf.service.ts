@@ -35,6 +35,12 @@ const RIGHT_COL_X = PAGE_LEFT + COL_WIDTH + MID_GAP;
 const HEADER_SPLIT_X = PAGE_LEFT + 305;
 const HEADER_GUTTER = 14;
 
+// The company's authorized-signatory stamp — a fixed asset (not per-company
+// configurable like the logo, since this system currently serves one
+// company) stamped on every payslip's footer.
+const SIGNATURE_PATH = path.join(__dirname, "..", "..", "storage", "signature", "authorized-signatory.jpeg");
+const SIGNATURE_SIZE = 52;
+
 export interface PayslipPdfData {
   company: {
     name: string;
@@ -61,11 +67,15 @@ export interface PayslipPdfData {
   attendance: { paidDays: number; otHours: number; otAmount: number };
   earnings: {
     basic: number;
+    /** Full monthly entitlement, unprorated — reference only (shown in Payslip Details, next to
+     *  Rate of Pay); never summed into Gross Earnings / Net Pay, unlike `basic`. */
+    monthlySalary: number;
     hra: number;
-    incentive: number;
     otAmount: number;
+    /** Other-earning source columns (Arrear, Conveyance, ...), each shown as its own line
+     *  instead of one combined "Incentive / Other Earnings" total. */
+    otherEarnings: { label: string; amount: number }[];
     grossEarnings: number;
-    pfSalaryAmt: number;
   };
   deductions: {
     esi: number;
@@ -224,16 +234,16 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
       ["ESI No.", data.employee.esiNo ?? "-"],
     ];
 
+    // Basic ÷ Paid Days — the effective per-day rate behind this month's Basic Pay.
+    const ratePerDay = data.attendance.paidDays > 0 ? data.earnings.basic / data.attendance.paidDays : 0;
+
     const payslipNo = `PS-${data.period.year}${String(data.period.month).padStart(2, "0")}-${data.employee.employeeCode}`;
     const payslipRows: [string, string][] = [
       ["Payslip No.", payslipNo],
       ["Pay Period", `${MONTH_NAMES[data.period.month - 1]} ${data.period.year}`],
       ["Deployed At", data.client.name],
-      ["Paid Days", `${data.attendance.paidDays}${data.attendance.otHours ? `  (OT ${data.attendance.otHours} hrs)` : ""}`],
-      // Informational only — the PF-qualifying wage base, not an additional
-      // earning. Kept out of the summed Earnings table below so it never
-      // gets added into Total Earnings / Gross / Net Pay.
-      ["PF Salary Amt", `Rs. ${formatCurrency(data.earnings.pfSalaryAmt)}`],
+      ["Paid Days", `${data.attendance.paidDays}`],
+      ["OT Hours", `${data.attendance.otHours}`],
     ];
 
     const detailsTop = doc.y;
@@ -242,34 +252,20 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     doc.y = detailsTop;
     const payslipBottom = detailsBox(RIGHT_COL_X, COL_WIDTH, "PAYSLIP DETAILS", payslipRows);
 
-    // Gross Earnings callout, filling the remaining right-column height.
-    const calloutTop = payslipBottom + 10;
-    const calloutBarH = 18;
-    const calloutBodyH = Math.max(34, leftBottom - calloutTop - calloutBarH);
-    doc.rect(RIGHT_COL_X, calloutTop, COL_WIDTH, calloutBarH).fill(NAVY);
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(8.5)
-      .fillColor(WHITE)
-      .text("GROSS EARNINGS", RIGHT_COL_X + 8, calloutTop + 5);
-    doc.rect(RIGHT_COL_X, calloutTop + calloutBarH, COL_WIDTH, calloutBodyH).fill(LIGHT_FILL_STRONG);
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(15)
-      .fillColor(NAVY)
-      .text(`Rs. ${formatCurrency(data.earnings.grossEarnings)}`, RIGHT_COL_X + 8, calloutTop + calloutBarH + (calloutBodyH - 15) / 2 - 2, {
-        width: COL_WIDTH - 16,
-      });
-    doc.fillColor("black");
-
-    doc.y = Math.max(leftBottom, calloutTop + calloutBarH + calloutBodyH) + 18;
+    doc.y = Math.max(leftBottom, payslipBottom) + 18;
 
     // === Earnings / Deductions table ===
     const earningsRows: [string, number][] = [
-      ["Basic Pay", data.earnings.basic],
+      // Basic Pay (the full, unprorated monthly entitlement) and Rate of Pay (its per-day
+      // equivalent) are shown for reference alongside Earning Payable — the actual,
+      // prorated-for-Paid-Days figure — but only Earning Payable is included in Total
+      // Earnings (A) / Gross Earnings / Net Pay.
+      ["Basic Pay", data.earnings.monthlySalary],
+      ["Rate of Pay", ratePerDay],
+      ["Earning Payable", data.earnings.basic],
       ["House Rent Allowance (HRA)", data.earnings.hra],
-      ["Incentive / Other Earnings", data.earnings.incentive],
       ["OT Amount", data.earnings.otAmount],
+      ...data.earnings.otherEarnings.map(({ label, amount }): [string, number] => [label, amount]),
     ];
     const deductionRows: [string, number][] = [
       ["ESI", data.deductions.esi],
@@ -356,26 +352,33 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     // === Footer ===
     // Kept well clear of the bottom margin — PDFKit silently starts a new
     // page if a text call's computed height would cross it, which (at -95)
-    // clipped the last footer line onto a stray blank page 2.
-    const footerY = doc.page.height - 120;
+    // clipped the last footer line onto a stray blank page 2. The signature
+    // block (image + caption below it) is the tallest thing down here, so
+    // -135 is sized to that, not just the one-line disclaimer text.
+    const footerY = doc.page.height - 135;
     doc.moveTo(PAGE_LEFT, footerY).lineTo(PAGE_RIGHT, footerY).strokeColor(LIGHT_FILL_STRONG).lineWidth(0.75).stroke();
     doc
       .fontSize(8)
       .font("Helvetica")
       .fillColor(GRAY)
-      .text("This is a system-generated payslip and does not require a signature.", PAGE_LEFT, footerY + 10, {
+      .text("This is a system-generated payslip.", PAGE_LEFT, footerY + 10, {
         width: 320,
       });
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .fillColor(NAVY)
-      .text(`For ${data.company.name}`, PAGE_LEFT, footerY + 32, { width: PAGE_WIDTH, align: "right" });
-    doc
-      .font("Helvetica")
-      .fontSize(8)
-      .fillColor(GRAY)
-      .text("Authorized Signatory", PAGE_LEFT, footerY + 48, { width: PAGE_WIDTH, align: "right" });
+
+    if (fs.existsSync(SIGNATURE_PATH)) {
+      try {
+        const sigX = PAGE_RIGHT - SIGNATURE_SIZE;
+        doc.image(SIGNATURE_PATH, sigX, footerY + 8, { width: SIGNATURE_SIZE, height: SIGNATURE_SIZE, fit: [SIGNATURE_SIZE, SIGNATURE_SIZE] });
+        doc
+          .font("Helvetica")
+          .fontSize(8)
+          .fillColor(GRAY)
+          .text("Authorized Signatory", PAGE_RIGHT - 130, footerY + 8 + SIGNATURE_SIZE + 3, { width: 130, align: "right" });
+        doc.fillColor("black");
+      } catch {
+        // Ignore an unreadable/unsupported signature file rather than failing generation.
+      }
+    }
 
     doc.end();
 
