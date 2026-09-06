@@ -25,6 +25,11 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 
+# The authorized-signatory stamp (see SIGNATURE_PATH in pdf.service.ts) is a
+# fixed asset checked into git, unlike the logo/payslips below — it ships
+# with the image rather than depending on the host's mounted volume.
+COPY --from=build /app/storage/signature ./storage/signature
+
 # Payslip PDFs / uploaded logos land here (see PAYSLIP_STORAGE_DIR /
 # LOGO_DIR in src) — mount a volume on this path to persist them.
 RUN mkdir -p storage/payslips storage/logo

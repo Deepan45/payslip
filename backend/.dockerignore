@@ -1,6 +1,14 @@
 node_modules
 dist
-storage
+# Runtime-populated storage — uploaded logos, generated payslips, and
+# incoming uploads — is intentionally excluded (see the Dockerfile's mounted
+# volume + resolveLogoPath in upload.controller.ts, which already handle
+# these files existing only on the running host, not in the image). Static
+# assets checked into git (storage/signature/*) are NOT excluded here, so
+# they still reach the build context and get copied into the image below.
+storage/uploads
+storage/payslips
+storage/logo
 prisma/dev.db
 .env
 .env.*

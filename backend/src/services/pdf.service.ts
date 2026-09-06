@@ -246,7 +246,11 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
       ["OT Hours", `${data.attendance.otHours}`],
       // Full monthly entitlement — reference only. The Earnings table below shows the
       // prorated, actually-payable Basic Pay figure, which is what feeds Gross Earnings / Net Pay.
-      ["Monthly Salary", `Rs. ${formatCurrency(data.earnings.monthlySalary)}`],
+      // Omitted entirely (rather than shown as "Rs. 0.00") when this client's sheet doesn't
+      // have a Monthly Salary column mapped yet.
+      ...(data.earnings.monthlySalary > 0
+        ? ([["Monthly Salary", `Rs. ${formatCurrency(data.earnings.monthlySalary)}`]] as [string, string][])
+        : []),
     ];
 
     const detailsTop = doc.y;
