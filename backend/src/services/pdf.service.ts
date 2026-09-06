@@ -381,9 +381,13 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
           .fillColor(GRAY)
           .text("Authorized Signatory", PAGE_RIGHT - 130, footerY + 8 + SIGNATURE_SIZE + 3, { width: 130, align: "right" });
         doc.fillColor("black");
-      } catch {
-        // Ignore an unreadable/unsupported signature file rather than failing generation.
+      } catch (err) {
+        // Never fail the whole payslip over an unreadable/unsupported signature file — but log
+        // it loudly rather than silently, so a broken stamp is diagnosable instead of a mystery.
+        console.error("[pdf.service] Failed to draw signature stamp:", err);
       }
+    } else {
+      console.error("[pdf.service] Signature stamp file not found at:", SIGNATURE_PATH);
     }
 
     doc.end();
