@@ -98,7 +98,7 @@ h3 { font-size: 13px; font-weight: 700; margin: 0; }
   flex-shrink: 0;
   box-shadow: var(--shadow-xs);
 }
-.sidebar-logo { height: 140%; width: auto; }
+.sidebar-logo { width: 100%; height: 100%; object-fit: contain; }
 .sidebar-brand-name { font-weight: 800; font-size: 15.5px; color: #fff; line-height: 1.25; letter-spacing: -0.01em; }
 .sidebar-brand-sub { font-size: 10.5px; color: var(--color-accent); letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; }
 

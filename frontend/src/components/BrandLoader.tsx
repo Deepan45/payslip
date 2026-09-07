@@ -1,4 +1,4 @@
-import logo from "../assets/logo.jpeg";
+import logo from "../assets/logo-icon.jpeg";
 
 /** Branded loading indicator — pulsing logo with a spinning ring, for longer-running operations. */
 export function BrandLoader({ message }: { message: string }) {

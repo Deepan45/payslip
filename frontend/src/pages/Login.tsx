@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import logo from "../assets/logo.jpeg";
+import logo from "../assets/logo-full.jpeg";
 
 const FEATURES: { icon: string; label: string }[] = [
   { icon: "M12 16V4M12 4l-4 4M12 4l4 4M4 20h16", label: "Upload salary sheets for any client site" },

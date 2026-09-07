@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import logo from "../assets/logo.jpeg";
+import logo from "../assets/logo-icon.jpeg";
 
 type IconProps = { className?: string };
 const icon = (path: string) =>
