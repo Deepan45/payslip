@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePortalAuth } from "../../context/PortalAuthContext";
-import logo from "../../assets/logo.png";
+import logo from "../../assets/logo.jpeg";
 
 export function PortalLogin() {
   const { login } = usePortalAuth();

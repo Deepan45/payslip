@@ -1,4 +1,4 @@
-import logo from "../assets/logo.png";
+import logo from "../assets/logo.jpeg";
 
 /** Full-section branded loading state — pulsing logo in a spinning ring, centered. Used while a page's primary data is loading. */
 export function PageLoader({ message = "Loading..." }: { message?: string }) {
