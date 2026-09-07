@@ -340,7 +340,7 @@ h3 { font-size: 13px; font-weight: 700; margin: 0; }
   padding: 40px 36px;
 }
 .auth-form { width: 100%; }
-.auth-form-logo { display: block; height: 150px; width: auto; margin: 0 auto 24px; }
+.auth-form-logo { display: block; height: 88px; width: auto; margin: 0 auto 20px; }
 .auth-form-title { font-size: 22px; margin-bottom: 4px; }
 
 @media (max-width: 860px) {
