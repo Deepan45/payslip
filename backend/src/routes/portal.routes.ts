@@ -4,6 +4,7 @@ import { prisma } from "../config/db";
 import { verifyPassword } from "../utils/password";
 import { signToken } from "../utils/jwt";
 import { requireEmployeeAuth, AuthedRequest } from "../middleware/auth";
+import { payslipFileName } from "../utils/payslipFileName";
 
 export const portalRouter = Router();
 
@@ -58,5 +59,5 @@ portalRouter.get("/payslips/:payslipId/download", requireEmployeeAuth, async (re
   if (!fs.existsSync(payslip.pdfPath)) return res.status(404).json({ error: "Payslip file missing" });
 
   const { employee, sheet } = payslip.salaryRecord;
-  res.download(payslip.pdfPath, `Payslip-${employee.employeeCode}-${sheet.periodMonth}-${sheet.periodYear}.pdf`);
+  res.download(payslip.pdfPath, payslipFileName(employee.employeeCode, employee.name, sheet.periodMonth, sheet.periodYear));
 });

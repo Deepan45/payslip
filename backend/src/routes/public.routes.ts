@@ -2,6 +2,7 @@ import { Router } from "express";
 import fs from "fs";
 import { prisma } from "../config/db";
 import { verifyPayslipLink } from "../utils/signedLink";
+import { payslipFileName } from "../utils/payslipFileName";
 
 // Unauthenticated routes reachable via a signed, time-limited token only —
 // used so a WhatsApp/email message can link straight to a payslip PDF
@@ -22,5 +23,5 @@ publicRouter.get("/payslips/:payslipId", async (req, res) => {
   if (!payslip || !fs.existsSync(payslip.pdfPath)) return res.status(404).json({ error: "Payslip not found" });
 
   const { employee, sheet } = payslip.salaryRecord;
-  res.download(payslip.pdfPath, `Payslip-${employee.employeeCode}-${sheet.periodMonth}-${sheet.periodYear}.pdf`);
+  res.download(payslip.pdfPath, payslipFileName(employee.employeeCode, employee.name, sheet.periodMonth, sheet.periodYear));
 });

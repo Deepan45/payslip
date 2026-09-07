@@ -9,6 +9,7 @@ import {
   sendPayslipEmail,
   sendPayslipWhatsApp,
 } from "../services/notification.service";
+import { payslipFileName } from "../utils/payslipFileName";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -28,8 +29,7 @@ payslipRouter.get("/:payslipId/download", requireAuth, async (req, res) => {
   }
 
   const { employee, sheet } = payslip.salaryRecord;
-  const fileName = `Payslip-${employee.employeeCode}-${sheet.periodMonth}-${sheet.periodYear}.pdf`;
-  res.download(payslip.pdfPath, fileName);
+  res.download(payslip.pdfPath, payslipFileName(employee.employeeCode, employee.name, sheet.periodMonth, sheet.periodYear));
 });
 
 // Bulk download all payslips for one uploaded sheet (pay period) as a zip.
@@ -48,7 +48,7 @@ payslipRouter.get("/sheet/:sheetId/download-all", requireAuth, async (req, res) 
     .filter((r) => r.payslip && fs.existsSync(r.payslip.pdfPath))
     .map((r) => ({
       filePath: r.payslip!.pdfPath,
-      nameInZip: `${r.employee.employeeCode}-${r.employee.name}.pdf`,
+      nameInZip: payslipFileName(r.employee.employeeCode, r.employee.name, sheet.periodMonth, sheet.periodYear),
     }));
 
   if (entries.length === 0) {
