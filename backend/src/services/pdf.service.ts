@@ -234,9 +234,6 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
       ["ESI No.", data.employee.esiNo ?? "-"],
     ];
 
-    // Basic ÷ Paid Days — the effective per-day rate behind this month's Basic Pay.
-    const ratePerDay = data.attendance.paidDays > 0 ? data.earnings.basic / data.attendance.paidDays : 0;
-
     const payslipNo = `PS-${data.period.year}${String(data.period.month).padStart(2, "0")}-${data.employee.employeeCode}`;
     const payslipRows: [string, string][] = [
       ["Payslip No.", payslipNo],
@@ -244,13 +241,6 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
       ["Deployed At", data.client.name],
       ["Paid Days", `${data.attendance.paidDays}`],
       ["OT Hours", `${data.attendance.otHours}`],
-      // Full monthly entitlement — reference only. The Earnings table below shows the
-      // prorated, actually-payable Basic Pay figure, which is what feeds Gross Earnings / Net Pay.
-      // Omitted entirely (rather than shown as "Rs. 0.00") when this client's sheet doesn't
-      // have a Monthly Salary column mapped yet.
-      ...(data.earnings.monthlySalary > 0
-        ? ([["Monthly Salary", `Rs. ${formatCurrency(data.earnings.monthlySalary)}`]] as [string, string][])
-        : []),
     ];
 
     const detailsTop = doc.y;
@@ -263,12 +253,13 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
 
     // === Earnings / Deductions table ===
     const earningsRows: [string, number][] = [
-      // One line for Basic Pay — its per-day Rate of Pay shown inline in parentheses next to
-      // the label (matching the client's own payslip format), amount = the actual payable
-      // figure for Paid Days (data.earnings.basic), which is what feeds Total Earnings (A) /
-      // Gross Earnings / Net Pay. The full monthly entitlement is shown separately, for
-      // reference only, in Payslip Details.
-      [`Basic Pay (Rs. ${formatCurrency(ratePerDay)}/day)`, data.earnings.basic],
+      // Rate of Pay is the full monthly entitlement (data.earnings.monthlySalary) — shown for
+      // reference alongside Payable Earning, the actual prorated-for-Paid-Days figure
+      // (data.earnings.basic) that is what actually feeds Total Earnings (A) / Gross Earnings /
+      // Net Pay. Omitted (rather than shown as 0.00) when this client's sheet doesn't have a
+      // Monthly Salary column mapped yet.
+      ...(data.earnings.monthlySalary > 0 ? ([["Rate of Pay", data.earnings.monthlySalary]] as [string, number][]) : []),
+      ["Payable Earning", data.earnings.basic],
       ["House Rent Allowance (HRA)", data.earnings.hra],
       ["OT Amount", data.earnings.otAmount],
       ...data.earnings.otherEarnings.map(({ label, amount }): [string, number] => [label, amount]),
