@@ -252,17 +252,19 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     doc.y = Math.max(leftBottom, payslipBottom) + 18;
 
     // === Earnings / Deductions table ===
-    const earningsRows: [string, number][] = [
-      // Rate of Pay is the full monthly entitlement (data.earnings.monthlySalary) — shown for
-      // reference alongside Payable Earning, the actual prorated-for-Paid-Days figure
-      // (data.earnings.basic) that is what actually feeds Total Earnings (A) / Gross Earnings /
-      // Net Pay. Omitted (rather than shown as 0.00) when this client's sheet doesn't have a
-      // Monthly Salary column mapped yet.
-      ...(data.earnings.monthlySalary > 0 ? ([["Rate of Pay", data.earnings.monthlySalary]] as [string, number][]) : []),
-      ["Payable Earning", data.earnings.basic],
-      ["House Rent Allowance (HRA)", data.earnings.hra],
-      ["OT Amount", data.earnings.otAmount],
-      ...data.earnings.otherEarnings.map(({ label, amount }): [string, number] => [label, amount]),
+    // Earnings carry both a Rate of Pay and a Payable amount per line, shown as two columns
+    // (matching the client's paper payslip format). Only Basic actually has a distinct rate —
+    // data.earnings.monthlySalary is its full monthly entitlement, unprorated, while
+    // data.earnings.basic is what's actually payable for Paid Days and what feeds Total
+    // Earnings (A) / Gross Earnings / Net Pay. Every other line (HRA, OT, other earnings) has
+    // only a payable amount, so its Rate of Pay cell is left blank. Basic's rate is omitted
+    // (rather than shown as 0.00) when this client's sheet doesn't have a Monthly Salary column
+    // mapped yet.
+    const earningsRows: { label: string; rate?: number; payable: number }[] = [
+      { label: "Basic", rate: data.earnings.monthlySalary > 0 ? data.earnings.monthlySalary : undefined, payable: data.earnings.basic },
+      { label: "House Rent Allowance (HRA)", payable: data.earnings.hra },
+      { label: "OT Amount", payable: data.earnings.otAmount },
+      ...data.earnings.otherEarnings.map(({ label, amount }) => ({ label, payable: amount })),
     ];
     const deductionRows: [string, number][] = [
       ["ESI", data.deductions.esi],
@@ -280,25 +282,39 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     const totalsRowH = 20;
 
     const amtColW = 78;
-    const earnLabelX = PAGE_LEFT + 8;
-    const earnAmtX = PAGE_LEFT + COL_WIDTH - amtColW;
     const dedLabelX = RIGHT_COL_X + 8;
     const dedAmtX = RIGHT_COL_X + COL_WIDTH - amtColW;
+
+    // Earnings side splits its amount column in two — Rate and Payable — so narrower than the
+    // deductions side's single amount column.
+    const earnLabelX = PAGE_LEFT + 8;
+    const rateColW = 48;
+    const payableColW = 58;
+    const earnPayableX = PAGE_LEFT + COL_WIDTH - payableColW;
+    const earnRateX = earnPayableX - 4 - rateColW;
+    const earnLabelW = earnRateX - earnLabelX - 4;
 
     doc.rect(PAGE_LEFT, tableTop, COL_WIDTH, tableHeaderH).fill(NAVY);
     doc.rect(RIGHT_COL_X, tableTop, COL_WIDTH, tableHeaderH).fill(NAVY);
     doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE);
     doc.text("EARNINGS", earnLabelX, tableTop + 6);
-    doc.text("AMOUNT (INR)", earnAmtX, tableTop + 6, { width: amtColW, align: "right" });
+    doc.font("Helvetica-Bold").fontSize(6);
+    doc.text("Rate of Pay", earnRateX, tableTop + 8, { width: rateColW, align: "right" });
+    doc.text("Payable", earnPayableX, tableTop + 8, { width: payableColW, align: "right" });
+    doc.font("Helvetica-Bold").fontSize(9);
     doc.text("DEDUCTIONS", dedLabelX, tableTop + 6);
     doc.text("AMOUNT (INR)", dedAmtX, tableTop + 6, { width: amtColW, align: "right" });
 
     doc.font("Helvetica").fontSize(9).fillColor("black");
     for (let i = 0; i < lineRows; i++) {
       const rowY = tableTop + tableHeaderH + i * tableRowH + 5;
-      if (earningsRows[i]) {
-        doc.text(earningsRows[i][0], earnLabelX, rowY, { width: COL_WIDTH - amtColW - 16 });
-        doc.text(formatCurrency(earningsRows[i][1]), earnAmtX, rowY, { width: amtColW, align: "right" });
+      const earningsRow = earningsRows[i];
+      if (earningsRow) {
+        doc.text(earningsRow.label, earnLabelX, rowY, { width: earnLabelW });
+        if (earningsRow.rate !== undefined) {
+          doc.text(formatCurrency(earningsRow.rate), earnRateX, rowY, { width: rateColW, align: "right" });
+        }
+        doc.text(formatCurrency(earningsRow.payable), earnPayableX, rowY, { width: payableColW, align: "right" });
       }
       if (deductionRows[i]) {
         doc.text(deductionRows[i][0], dedLabelX, rowY, { width: COL_WIDTH - amtColW - 16 });
@@ -315,11 +331,24 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     doc.rect(PAGE_LEFT, totalsY, COL_WIDTH, totalsRowH).fill(LIGHT_FILL);
     doc.rect(RIGHT_COL_X, totalsY, COL_WIDTH, totalsRowH).fill(LIGHT_FILL);
     doc.font("Helvetica-Bold").fontSize(9).fillColor(NAVY);
-    doc.text("Total Earnings (A)", earnLabelX, totalsY + 6, { width: COL_WIDTH - amtColW - 16 });
-    doc.text(formatCurrency(data.earnings.grossEarnings), earnAmtX, totalsY + 6, { width: amtColW, align: "right" });
+    doc.text("Total Earnings (A)", earnLabelX, totalsY + 6, { width: earnLabelW });
+    doc.text(formatCurrency(data.earnings.grossEarnings), earnPayableX, totalsY + 6, { width: payableColW, align: "right" });
     doc.text("Total Deductions (B)", dedLabelX, totalsY + 6, { width: COL_WIDTH - amtColW - 16 });
     doc.text(formatCurrency(data.deductions.totalDeductions), dedAmtX, totalsY + 6, { width: amtColW, align: "right" });
     doc.fillColor("black");
+
+    // Light grid border around both tables — an outer box plus a divider between each column,
+    // like a printed ledger.
+    const tableBottom = totalsY + totalsRowH;
+    doc.strokeColor(LIGHT_FILL_STRONG).lineWidth(0.75);
+    doc.rect(PAGE_LEFT, tableTop, COL_WIDTH, tableBottom - tableTop).stroke();
+    doc.rect(RIGHT_COL_X, tableTop, COL_WIDTH, tableBottom - tableTop).stroke();
+    const earnRateDividerX = earnRateX - 4;
+    const earnPayableDividerX = earnPayableX - 4;
+    doc.moveTo(earnRateDividerX, tableTop).lineTo(earnRateDividerX, tableBottom).stroke();
+    doc.moveTo(earnPayableDividerX, tableTop).lineTo(earnPayableDividerX, tableBottom).stroke();
+    const dedAmtDividerX = dedAmtX - 8;
+    doc.moveTo(dedAmtDividerX, tableTop).lineTo(dedAmtDividerX, tableBottom).stroke();
 
     doc.y = totalsY + totalsRowH + 16;
 
