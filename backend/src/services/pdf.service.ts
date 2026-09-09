@@ -288,8 +288,8 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     // Earnings side splits its amount column in two — Rate and Payable — so narrower than the
     // deductions side's single amount column.
     const earnLabelX = PAGE_LEFT + 8;
-    const rateColW = 48;
-    const payableColW = 58;
+    const rateColW = 46;
+    const payableColW = 50;
     const earnPayableX = PAGE_LEFT + COL_WIDTH - payableColW;
     const earnRateX = earnPayableX - 4 - rateColW;
     const earnLabelW = earnRateX - earnLabelX - 4;
@@ -298,9 +298,9 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     doc.rect(RIGHT_COL_X, tableTop, COL_WIDTH, tableHeaderH).fill(NAVY);
     doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE);
     doc.text("EARNINGS", earnLabelX, tableTop + 6);
-    doc.font("Helvetica-Bold").fontSize(6);
-    doc.text("Rate of Pay", earnRateX, tableTop + 8, { width: rateColW, align: "right" });
-    doc.text("Payable", earnPayableX, tableTop + 8, { width: payableColW, align: "right" });
+    doc.font("Helvetica-Bold").fontSize(8);
+    doc.text("Rate of Pay", earnRateX, tableTop + 6, { width: rateColW, align: "right" });
+    doc.text("Payable", earnPayableX, tableTop + 6, { width: payableColW, align: "right" });
     doc.font("Helvetica-Bold").fontSize(9);
     doc.text("DEDUCTIONS", dedLabelX, tableTop + 6);
     doc.text("AMOUNT (INR)", dedAmtX, tableTop + 6, { width: amtColW, align: "right" });
