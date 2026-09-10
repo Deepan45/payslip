@@ -28,6 +28,13 @@ export async function downloadAllPayslipsForSheet(sheetId: string) {
   saveBlob(res.data, fileName);
 }
 
+/** Re-downloads the originally uploaded workbook for a sheet (not the generated payslips). */
+export async function downloadSalarySheetSource(sheetId: string, fallbackFileName: string) {
+  const res = await api.get(`/history/${sheetId}/download`, { responseType: "blob" });
+  const fileName = fileNameFromDisposition(res.headers["content-disposition"], fallbackFileName);
+  saveBlob(res.data, fileName);
+}
+
 export async function downloadSalarySheetTemplate() {
   const res = await api.get("/uploads/template", { responseType: "blob" });
   const fileName = fileNameFromDisposition(res.headers["content-disposition"], "Salary-Sheet-Template.xlsx");

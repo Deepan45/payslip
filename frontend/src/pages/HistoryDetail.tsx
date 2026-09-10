@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { api, apiErrorMessage } from "../api/client";
-import { downloadPayslip, downloadAllPayslipsForSheet } from "../api/payslip";
+import { downloadPayslip, downloadAllPayslipsForSheet, downloadSalarySheetSource } from "../api/payslip";
 import { Pagination } from "../components/Pagination";
 import { PayslipPreviewModal } from "../components/PayslipPreviewModal";
 import { ActionButton } from "../components/ActionButton";
@@ -25,6 +25,7 @@ interface Record {
 interface SheetDetail {
   id: string;
   fileName: string;
+  filePath: string | null;
   periodMonth: number;
   periodYear: number;
   uploadedAt: string;
@@ -38,6 +39,7 @@ export function HistoryDetail() {
   const [sheet, setSheet] = useState<SheetDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [sourceDownloading, setSourceDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -65,6 +67,19 @@ export function HistoryDetail() {
       await downloadAllPayslipsForSheet(sheetId);
     } finally {
       setBulkLoading(false);
+    }
+  }
+
+  async function handleDownloadSource() {
+    if (!sheetId || !sheet) return;
+    setError(null);
+    setSourceDownloading(true);
+    try {
+      await downloadSalarySheetSource(sheetId, sheet.fileName);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Failed to download the original sheet"));
+    } finally {
+      setSourceDownloading(false);
     }
   }
 
@@ -164,6 +179,13 @@ export function HistoryDetail() {
             <button className="btn-primary" onClick={handleBulkDownload} disabled={bulkLoading}>
               {bulkLoading ? "Preparing zip..." : "Download All (.zip)"}
             </button>
+            <ActionButton
+              icon="download"
+              disabled={!sheet.filePath || sourceDownloading}
+              onClick={handleDownloadSource}
+            >
+              {sourceDownloading ? "Downloading..." : "Download Original Sheet"}
+            </ActionButton>
             {selected.size > 0 && (
               <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={() => setConfirmBulkRecords(true)}>
                 {deleting ? "Deleting..." : `Delete ${selected.size} Selected`}

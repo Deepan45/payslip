@@ -1,9 +1,11 @@
 import { Response } from "express";
 import path from "path";
+import fs from "fs";
 import { prisma } from "../config/db";
 import { AuthedRequest } from "../middleware/auth";
 import {
   readSheetGrid,
+  readSheetMerges,
   suggestColumnMapping,
   checkMappingDrift,
   parseWithMapping,
@@ -23,6 +25,7 @@ const UPLOAD_CONCURRENCY = 20;
 
 const PAYSLIP_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "payslips");
 const LOGO_DIR = path.join(__dirname, "..", "..", "storage", "logo");
+const SALARY_SHEET_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "salary-sheets");
 
 // CompanySettings.logoPath was historically stored as the full absolute path
 // returned by multer at upload time (see company.routes.ts) — which bakes in
@@ -61,6 +64,7 @@ export async function analyzeSalarySheet(req: AuthedRequest, res: Response) {
 
   const grid = readSheetGrid(file.buffer);
   if (grid.length === 0) return res.status(400).json({ error: "Workbook has no sheets or is empty" });
+  const merges = readSheetMerges(file.buffer);
 
   const preview = grid.slice(0, 10);
 
@@ -76,7 +80,7 @@ export async function analyzeSalarySheet(req: AuthedRequest, res: Response) {
     // lets the client's already-confirmed mapping win for every field it
     // already covers, so a manually added extra source column isn't lost
     // just because the auto-suggester wouldn't have found it on its own.
-    const suggestion = suggestColumnMapping(grid);
+    const suggestion = suggestColumnMapping(grid, merges);
     if (drift.ok) {
       suggestion.headerRowStart = mapping.headerRowStart;
       suggestion.headerRowEnd = mapping.headerRowEnd;
@@ -87,7 +91,7 @@ export async function analyzeSalarySheet(req: AuthedRequest, res: Response) {
     return res.json({ status: "drift", drifted: drift.drifted, previousMapping: mapping, suggestion, preview });
   }
 
-  const suggestion = suggestColumnMapping(grid);
+  const suggestion = suggestColumnMapping(grid, merges);
   return res.json({ status: "needs_mapping", suggestion, preview });
 }
 
@@ -153,6 +157,19 @@ export async function uploadSalarySheet(req: AuthedRequest, res: Response) {
     },
   });
 
+  // Keep the originally uploaded workbook on disk (per sheet, in its own subfolder) so it can be
+  // re-downloaded later from History — best-effort: a failure here shouldn't fail the whole upload,
+  // since the parsed data and payslips are already what actually matters.
+  try {
+    const safeFileName = path.basename(file.originalname).replace(/[^\w.\- ]/g, "_") || "salary-sheet.xlsx";
+    const sheetFileDir = path.join(SALARY_SHEET_STORAGE_DIR, sheet.id);
+    fs.mkdirSync(sheetFileDir, { recursive: true });
+    fs.writeFileSync(path.join(sheetFileDir, safeFileName), file.buffer);
+    await prisma.salarySheet.update({ where: { id: sheet.id }, data: { filePath: safeFileName } });
+  } catch (err) {
+    console.error("Failed to persist original salary sheet file:", err);
+  }
+
   const generated: { employeeCode: string; name: string; payslipId: string }[] = [];
   const generationErrors: { employeeCode: string; message: string }[] = [];
 
@@ -201,6 +218,7 @@ export async function uploadSalarySheet(req: AuthedRequest, res: Response) {
           basic: row.basic,
           monthlySalary: row.monthlySalary,
           hra: row.hra,
+          monthlyHra: row.monthlyHra,
           incentive: row.incentive,
           otherEarnings: row.otherEarnings.length > 0 ? (row.otherEarnings as unknown as Prisma.InputJsonValue) : undefined,
           grossEarnings: row.grossEarnings,
@@ -261,6 +279,7 @@ export async function uploadSalarySheet(req: AuthedRequest, res: Response) {
             basic: row.basic,
             monthlySalary: row.monthlySalary,
             hra: row.hra,
+            monthlyHra: row.monthlyHra,
             otAmount: row.otAmount,
             otherEarnings: row.otherEarnings,
             grossEarnings: row.grossEarnings,

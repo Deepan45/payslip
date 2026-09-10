@@ -7,6 +7,7 @@ import { requireAuth } from "../middleware/auth";
 export const historyRouter = Router();
 
 const PAYSLIP_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "payslips");
+const SALARY_SHEET_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "salary-sheets");
 
 /**
  * Deletes a set of SalaryRecords (and everything hanging off them) cleanly:
@@ -77,6 +78,24 @@ historyRouter.get("/:sheetId", requireAuth, async (req, res) => {
   res.json({ sheet });
 });
 
+// Re-downloads the originally uploaded workbook for this sheet, exactly as uploaded — not the
+// generated payslips. Only available for sheets uploaded after this feature existed (filePath set).
+historyRouter.get("/:sheetId/download", requireAuth, async (req, res) => {
+  const sheet = await prisma.salarySheet.findUnique({
+    where: { id: req.params.sheetId },
+    select: { id: true, fileName: true, filePath: true },
+  });
+  if (!sheet) return res.status(404).json({ error: "Sheet not found" });
+  if (!sheet.filePath) {
+    return res.status(404).json({ error: "The original file for this upload wasn't kept (uploaded before this feature was added)." });
+  }
+  const diskPath = path.join(SALARY_SHEET_STORAGE_DIR, sheet.id, sheet.filePath);
+  if (!fs.existsSync(diskPath)) {
+    return res.status(404).json({ error: "The original file is missing from storage." });
+  }
+  res.download(diskPath, sheet.fileName);
+});
+
 // Bulk-delete specific payslips (salary records) within one sheet — the
 // underlying employees and the sheet itself are untouched, only these rows.
 historyRouter.post("/:sheetId/records/delete", requireAuth, async (req, res) => {
@@ -114,8 +133,10 @@ async function deleteSheet(sheetId: string): Promise<{ ok: true } | { ok: false 
   await prisma.salarySheet.delete({ where: { id: sheet.id } });
 
   // Best-effort cleanup of the sheet's payslip directory (any files
-  // deleteSalaryRecordsCascade missed, e.g. from a record already gone).
+  // deleteSalaryRecordsCascade missed, e.g. from a record already gone) and
+  // its saved original workbook.
   fs.rm(path.join(PAYSLIP_STORAGE_DIR, sheet.id), { recursive: true, force: true }, () => {});
+  fs.rm(path.join(SALARY_SHEET_STORAGE_DIR, sheet.id), { recursive: true, force: true }, () => {});
 
   return { ok: true };
 }
