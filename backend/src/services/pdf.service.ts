@@ -646,74 +646,71 @@ export function generateClientBillPdf(data: ClientBillPdfData, outputPath: strin
 
     doc.y += 12;
 
-    // === Totals summary (kept together — start a fresh page if it won't fit) ===
-    const SUMMARY_BLOCK_H = 210;
-    if (doc.y + SUMMARY_BLOCK_H > doc.page.height - 50) {
+    // === Bill Summary — a proper bordered table (Description | Amount), full page width, matching
+    // the employee-wise table's visual language. Full width (not squeezed into a half-page column)
+    // is what lets long labels like "Total Employer EPF (EPS + EPF diff + EDLI)" sit on one line
+    // instead of wrapping and colliding with the row below.
+    interface SummaryRow {
+      label: string;
+      amount: number;
+      emphasize?: boolean; // highlighted subtotal row (Total Wage Cost)
+    }
+    const summaryRows: SummaryRow[] = [
+      { label: "Total Gross Wages", amount: data.totals.totalGrossWages },
+      { label: "Total Employer EPF (EPS + EPF diff + EDLI)", amount: data.totals.totalEmployerEpf },
+      { label: "Total Employer ESI", amount: data.totals.totalEmployerEsi },
+      { label: "Total Employer LWF", amount: data.totals.totalEmployerLwf },
+      { label: "PF Administrative Charges", amount: data.totals.pfAdminCharge },
+      { label: "Total Wage Cost", amount: data.totals.totalWageCost, emphasize: true },
+      {
+        label: `Service Charge (${data.totals.employeeCount} x Rs. ${data.totals.billingRateUsed != null ? formatCurrency(data.totals.billingRateUsed) : "0.00"})`,
+        amount: data.totals.serviceCharge,
+      },
+    ];
+
+    const SUMMARY_DESC_W = 350;
+    const SUMMARY_AMT_W = PAGE_WIDTH - SUMMARY_DESC_W;
+    const summaryHeaderH = 20;
+    const summaryRowH = 18;
+    const summaryBlockH = 24 + summaryHeaderH + summaryRows.length * summaryRowH;
+    if (doc.y + summaryBlockH > doc.page.height - 50) {
       doc.addPage();
       doc.y = 50;
     }
 
-    const summaryRows: [string, number][] = [
-      ["Total Gross Wages", data.totals.totalGrossWages],
-      ["Total Employer EPF (EPS + EPF diff + EDLI)", data.totals.totalEmployerEpf],
-      ["Total Employer ESI", data.totals.totalEmployerEsi],
-      ["Total Employer LWF", data.totals.totalEmployerLwf],
-      ["PF Administrative Charges", data.totals.pfAdminCharge],
-    ];
-    const summaryX = RIGHT_COL_X;
-    const summaryW = COL_WIDTH;
-    const summaryLabelW = summaryW - 78;
-    let sy = doc.y;
-    doc.font("Helvetica-Bold").fontSize(9.5).fillColor(NAVY).text("BILL SUMMARY", PAGE_LEFT, sy);
-    sy = doc.y + 8;
-    const rowsTop = sy;
+    doc.font("Helvetica-Bold").fontSize(9.5).fillColor(NAVY).text("BILL SUMMARY", PAGE_LEFT, doc.y);
+    doc.y += 6;
 
-    doc.font("Helvetica").fontSize(8.5).fillColor("black");
-    for (const [label, amount] of summaryRows) {
-      doc.text(label, summaryX, sy, { width: summaryLabelW });
-      doc.text(formatCurrency(amount), summaryX + summaryLabelW, sy, { width: 78, align: "right" });
-      sy += 15;
-    }
+    const summaryTop = doc.y;
+    doc.rect(PAGE_LEFT, summaryTop, PAGE_WIDTH, summaryHeaderH).fill(NAVY);
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(WHITE);
+    doc.text("Description", PAGE_LEFT + 8, summaryTop + 6, { width: SUMMARY_DESC_W - 16 });
+    doc.text("Amount (INR)", PAGE_LEFT + SUMMARY_DESC_W, summaryTop + 6, { width: SUMMARY_AMT_W - 8, align: "right" });
+    doc.fillColor("black");
 
-    // Payment details, left column — only shown once any of it is actually configured in Settings.
-    if (data.company.bankName || data.company.bankAccountNo || data.company.bankIfscCode || data.company.billingTerms) {
-      let py = rowsTop;
-      doc.font("Helvetica-Bold").fontSize(8.5).fillColor(NAVY_MUTED).text("PAYMENT DETAILS", PAGE_LEFT, py, { width: COL_WIDTH });
-      py = doc.y + 4;
-      doc.font("Helvetica").fontSize(8.5).fillColor("black");
-      if (data.company.bankName) {
-        doc.text(`Bank: ${data.company.bankName}`, PAGE_LEFT, py, { width: COL_WIDTH });
-        py = doc.y + 2;
+    let ry = summaryTop + summaryHeaderH;
+    summaryRows.forEach((row, i) => {
+      if (row.emphasize) {
+        doc.rect(PAGE_LEFT, ry, PAGE_WIDTH, summaryRowH).fill(LIGHT_FILL_STRONG);
+      } else if (i % 2 === 1) {
+        doc.rect(PAGE_LEFT, ry, PAGE_WIDTH, summaryRowH).fill(LIGHT_FILL);
       }
-      if (data.company.bankAccountNo) {
-        doc.text(`A/c No.: ${data.company.bankAccountNo}`, PAGE_LEFT, py, { width: COL_WIDTH });
-        py = doc.y + 2;
-      }
-      if (data.company.bankIfscCode) {
-        doc.text(`IFSC: ${data.company.bankIfscCode}`, PAGE_LEFT, py, { width: COL_WIDTH });
-        py = doc.y + 2;
-      }
-      if (data.company.billingTerms) {
-        doc.font("Helvetica-Oblique").fillColor(NAVY_MUTED).text(data.company.billingTerms, PAGE_LEFT, py + 4, { width: COL_WIDTH });
-        doc.font("Helvetica").fillColor("black");
-      }
-    }
-
-    doc.moveTo(summaryX, sy + 2).lineTo(summaryX + summaryW, sy + 2).strokeColor(LIGHT_FILL_STRONG).lineWidth(0.5).stroke();
-    sy += 9;
-    doc.font("Helvetica-Bold").fillColor(NAVY);
-    doc.text("Total Wage Cost", summaryX, sy, { width: summaryLabelW });
-    doc.text(formatCurrency(data.totals.totalWageCost), summaryX + summaryLabelW, sy, { width: 78, align: "right" });
-    sy += 17;
-
-    doc.font("Helvetica").fillColor("black");
-    doc.text(`Service Charge (${data.totals.employeeCount} x Rs. ${data.totals.billingRateUsed != null ? formatCurrency(data.totals.billingRateUsed) : "0.00"})`, summaryX, sy, {
-      width: summaryLabelW,
+      doc
+        .font(row.emphasize ? "Helvetica-Bold" : "Helvetica")
+        .fontSize(8.5)
+        .fillColor(row.emphasize ? NAVY : "black");
+      doc.text(row.label, PAGE_LEFT + 8, ry + 4, { width: SUMMARY_DESC_W - 16 });
+      doc.text(formatCurrency(row.amount), PAGE_LEFT + SUMMARY_DESC_W, ry + 4, { width: SUMMARY_AMT_W - 8, align: "right" });
+      ry += summaryRowH;
     });
-    doc.text(formatCurrency(data.totals.serviceCharge), summaryX + summaryLabelW, sy, { width: 78, align: "right" });
-    sy += 20;
+    doc.fillColor("black");
 
-    doc.y = sy + 6;
+    const summaryBottom = ry;
+    doc.strokeColor(LIGHT_FILL_STRONG).lineWidth(0.75);
+    doc.rect(PAGE_LEFT, summaryTop, PAGE_WIDTH, summaryBottom - summaryTop).stroke();
+    doc.moveTo(PAGE_LEFT + SUMMARY_DESC_W, summaryTop).lineTo(PAGE_LEFT + SUMMARY_DESC_W, summaryBottom).stroke();
+
+    doc.y = summaryBottom + 16;
 
     // === Grand Total: two-tone bar ===
     const netTop = doc.y;
@@ -746,6 +743,25 @@ export function generateClientBillPdf(data: ClientBillPdfData, outputPath: strin
         .text("Note: no billing/service-charge rate is set for this client yet — the total above is wage cost only.", PAGE_LEFT, doc.y, {
           width: PAGE_WIDTH,
         });
+      doc.fillColor("black");
+    }
+
+    // === Payment Details — bank info + terms, only shown once any of it is set in Settings ===
+    if (data.company.bankName || data.company.bankAccountNo || data.company.bankIfscCode || data.company.billingTerms) {
+      doc.y += 14;
+      doc.font("Helvetica-Bold").fontSize(8.5).fillColor(NAVY_MUTED).text("PAYMENT DETAILS", PAGE_LEFT, doc.y, { width: PAGE_WIDTH });
+      doc.y += 2;
+      const bankParts = [
+        data.company.bankName && `Bank: ${data.company.bankName}`,
+        data.company.bankAccountNo && `A/c No.: ${data.company.bankAccountNo}`,
+        data.company.bankIfscCode && `IFSC: ${data.company.bankIfscCode}`,
+      ].filter((p): p is string => Boolean(p));
+      if (bankParts.length > 0) {
+        doc.font("Helvetica").fontSize(8.5).fillColor("black").text(bankParts.join("   |   "), PAGE_LEFT, doc.y, { width: PAGE_WIDTH });
+      }
+      if (data.company.billingTerms) {
+        doc.font("Helvetica-Oblique").fontSize(8.5).fillColor(NAVY_MUTED).text(data.company.billingTerms, PAGE_LEFT, doc.y + 3, { width: PAGE_WIDTH });
+      }
       doc.fillColor("black");
     }
 
