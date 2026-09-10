@@ -10,6 +10,22 @@ interface Company {
   officePhone: string | null;
   email: string | null;
   website: string | null;
+  pfEstablishmentId: string | null;
+  esicEmployerCode: string | null;
+  lwfRegistrationNo: string | null;
+  epfEmployerEpsRate: number;
+  epfEmployerPfRate: number;
+  epfEdliRate: number;
+  epfAdminChargeRate: number;
+  epfAdminChargeMin: number;
+  epsWageCeiling: number;
+  esiEmployerRate: number;
+  esiWageCeiling: number;
+  lwfSlabWageLimit: number;
+  lwfLowEmployeeAmt: number;
+  lwfLowEmployerAmt: number;
+  lwfHighEmployeeAmt: number;
+  lwfHighEmployerAmt: number;
 }
 
 export function Settings() {
@@ -25,18 +41,54 @@ export function Settings() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Statutory filing settings (PF/ESI/LWF) — used by the Statutory Filings page.
+  const [pfEstablishmentId, setPfEstablishmentId] = useState("");
+  const [esicEmployerCode, setEsicEmployerCode] = useState("");
+  const [lwfRegistrationNo, setLwfRegistrationNo] = useState("");
+  const [epfEmployerEpsRate, setEpfEmployerEpsRate] = useState(8.33);
+  const [epfEmployerPfRate, setEpfEmployerPfRate] = useState(3.67);
+  const [epfEdliRate, setEpfEdliRate] = useState(0.5);
+  const [epfAdminChargeRate, setEpfAdminChargeRate] = useState(0.5);
+  const [epfAdminChargeMin, setEpfAdminChargeMin] = useState(500);
+  const [epsWageCeiling, setEpsWageCeiling] = useState(15000);
+  const [esiEmployerRate, setEsiEmployerRate] = useState(3.25);
+  const [esiWageCeiling, setEsiWageCeiling] = useState(21000);
+  const [lwfSlabWageLimit, setLwfSlabWageLimit] = useState(3000);
+  const [lwfLowEmployeeAmt, setLwfLowEmployeeAmt] = useState(6);
+  const [lwfLowEmployerAmt, setLwfLowEmployerAmt] = useState(18);
+  const [lwfHighEmployeeAmt, setLwfHighEmployeeAmt] = useState(12);
+  const [lwfHighEmployerAmt, setLwfHighEmployerAmt] = useState(36);
+
+  function applyCompany(c: Company) {
+    setCompany(c);
+    setName(c.name);
+    setAddress(c.address ?? "");
+    setMobile(c.mobile ?? "");
+    setOfficePhone(c.officePhone ?? "");
+    setEmail(c.email ?? "");
+    setWebsite(c.website ?? "");
+    setPfEstablishmentId(c.pfEstablishmentId ?? "");
+    setEsicEmployerCode(c.esicEmployerCode ?? "");
+    setLwfRegistrationNo(c.lwfRegistrationNo ?? "");
+    setEpfEmployerEpsRate(c.epfEmployerEpsRate);
+    setEpfEmployerPfRate(c.epfEmployerPfRate);
+    setEpfEdliRate(c.epfEdliRate);
+    setEpfAdminChargeRate(c.epfAdminChargeRate);
+    setEpfAdminChargeMin(c.epfAdminChargeMin);
+    setEpsWageCeiling(c.epsWageCeiling);
+    setEsiEmployerRate(c.esiEmployerRate);
+    setEsiWageCeiling(c.esiWageCeiling);
+    setLwfSlabWageLimit(c.lwfSlabWageLimit);
+    setLwfLowEmployeeAmt(c.lwfLowEmployeeAmt);
+    setLwfLowEmployerAmt(c.lwfLowEmployerAmt);
+    setLwfHighEmployeeAmt(c.lwfHighEmployeeAmt);
+    setLwfHighEmployerAmt(c.lwfHighEmployerAmt);
+  }
+
   useEffect(() => {
     api.get("/company").then((res) => {
       const c = res.data.company as Company | null;
-      if (c) {
-        setCompany(c);
-        setName(c.name);
-        setAddress(c.address ?? "");
-        setMobile(c.mobile ?? "");
-        setOfficePhone(c.officePhone ?? "");
-        setEmail(c.email ?? "");
-        setWebsite(c.website ?? "");
-      }
+      if (c) applyCompany(c);
     });
   }, []);
 
@@ -46,8 +98,14 @@ export function Settings() {
     setMessage(null);
     setSaving(true);
     try {
-      const res = await api.put("/company", { name, address, mobile, officePhone, email, website });
-      setCompany(res.data.company);
+      const res = await api.put("/company", {
+        name, address, mobile, officePhone, email, website,
+        pfEstablishmentId, esicEmployerCode, lwfRegistrationNo,
+        epfEmployerEpsRate, epfEmployerPfRate, epfEdliRate, epfAdminChargeRate, epfAdminChargeMin, epsWageCeiling,
+        esiEmployerRate, esiWageCeiling,
+        lwfSlabWageLimit, lwfLowEmployeeAmt, lwfLowEmployerAmt, lwfHighEmployeeAmt, lwfHighEmployerAmt,
+      });
+      applyCompany(res.data.company);
 
       if (logo) {
         const formData = new FormData();
@@ -72,19 +130,19 @@ export function Settings() {
       <h1>Company Settings</h1>
       <p className="page-subtitle">This information appears in the header of every generated payslip.</p>
 
-      <div className="card" style={{ maxWidth: 560 }}>
-        <div className="section-title" style={{ marginBottom: 16 }}>
-          <span className="section-title-icon stat-icon-blue">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 21h18M6 21V8l6-4 6 4v13M9 21v-6h6v6M9 12h.01M15 12h.01M9 8h.01M15 8h.01" />
-            </svg>
-          </span>
-          <h2 style={{ margin: 0 }}>Company Profile</h2>
-        </div>
+      <form onSubmit={handleSave}>
+        {error && <div className="alert alert-error">{error}</div>}
+        {message && <div className="alert alert-success">{message}</div>}
 
-        <form onSubmit={handleSave}>
-          {error && <div className="alert alert-error">{error}</div>}
-          {message && <div className="alert alert-success">{message}</div>}
+        <div className="card" style={{ maxWidth: 560 }}>
+          <div className="section-title" style={{ marginBottom: 16 }}>
+            <span className="section-title-icon stat-icon-blue">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 21h18M6 21V8l6-4 6 4v13M9 21v-6h6v6M9 12h.01M15 12h.01M9 8h.01M15 8h.01" />
+              </svg>
+            </span>
+            <h2 style={{ margin: 0 }}>Company Profile</h2>
+          </div>
 
           <label>
             Company name
@@ -127,12 +185,115 @@ export function Settings() {
               <span className="badge badge-success">Logo set</span>
             </p>
           )}
+        </div>
 
-          <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? "Saving..." : "Save Settings"}
-          </button>
-        </form>
-      </div>
+        <div className="card" style={{ maxWidth: 560, marginTop: 20 }}>
+          <div className="section-title" style={{ marginBottom: 16 }}>
+            <span className="section-title-icon stat-icon-pink">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3v18h18M8 17V10M13 17V6M18 17v-4" />
+              </svg>
+            </span>
+            <h2 style={{ margin: 0 }}>Statutory Filing Settings</h2>
+          </div>
+          <p className="small" style={{ marginTop: -8, marginBottom: 16 }}>
+            Used to generate the PF ECR file, ESI contribution file, and LWF challan on the{" "}
+            <strong>Statutory Filings</strong> page. Rates default to the commonly published current statutory
+            rates — verify against the live EPFO/ESIC/LWF portal before a first real filing.
+          </p>
+
+          <div className="form-row">
+            <label>
+              EPFO establishment ID
+              <input value={pfEstablishmentId} onChange={(e) => setPfEstablishmentId(e.target.value)} placeholder="e.g. MH/BAN/1234567/000" />
+            </label>
+            <label>
+              ESIC employer code
+              <input value={esicEmployerCode} onChange={(e) => setEsicEmployerCode(e.target.value)} placeholder="17-digit code" />
+            </label>
+          </div>
+          <label>
+            LWF registration number
+            <input value={lwfRegistrationNo} onChange={(e) => setLwfRegistrationNo(e.target.value)} placeholder="e.g. Maharashtra LWF registration no." />
+          </label>
+
+          <p className="small" style={{ marginTop: 12, marginBottom: 4, fontWeight: 600 }}>PF (EPF/EPS/EDLI) rates</p>
+          <div className="form-row">
+            <label>
+              Employer EPS rate (%)
+              <input type="number" step="0.01" value={epfEmployerEpsRate} onChange={(e) => setEpfEmployerEpsRate(parseFloat(e.target.value) || 0)} />
+            </label>
+            <label>
+              Employer EPF rate (%)
+              <input type="number" step="0.01" value={epfEmployerPfRate} onChange={(e) => setEpfEmployerPfRate(parseFloat(e.target.value) || 0)} />
+            </label>
+          </div>
+          <div className="form-row">
+            <label>
+              EDLI rate (%)
+              <input type="number" step="0.01" value={epfEdliRate} onChange={(e) => setEpfEdliRate(parseFloat(e.target.value) || 0)} />
+            </label>
+            <label>
+              Admin charge rate (%)
+              <input type="number" step="0.01" value={epfAdminChargeRate} onChange={(e) => setEpfAdminChargeRate(parseFloat(e.target.value) || 0)} />
+            </label>
+          </div>
+          <div className="form-row">
+            <label>
+              Min. admin charge (₹/month)
+              <input type="number" step="0.01" value={epfAdminChargeMin} onChange={(e) => setEpfAdminChargeMin(parseFloat(e.target.value) || 0)} />
+            </label>
+            <label>
+              EPS/EDLI wage ceiling (₹)
+              <input type="number" step="1" value={epsWageCeiling} onChange={(e) => setEpsWageCeiling(parseFloat(e.target.value) || 0)} />
+            </label>
+          </div>
+
+          <p className="small" style={{ marginTop: 12, marginBottom: 4, fontWeight: 600 }}>ESI rates</p>
+          <div className="form-row">
+            <label>
+              Employer ESI rate (%)
+              <input type="number" step="0.01" value={esiEmployerRate} onChange={(e) => setEsiEmployerRate(parseFloat(e.target.value) || 0)} />
+            </label>
+            <label>
+              ESI wage ceiling (₹)
+              <input type="number" step="1" value={esiWageCeiling} onChange={(e) => setEsiWageCeiling(parseFloat(e.target.value) || 0)} />
+            </label>
+          </div>
+
+          <p className="small" style={{ marginTop: 12, marginBottom: 4, fontWeight: 600 }}>
+            LWF slabs (two-slab, e.g. Maharashtra) — amount depends on whether gross wages are at/below the limit
+          </p>
+          <label>
+            Slab wage limit (₹)
+            <input type="number" step="1" value={lwfSlabWageLimit} onChange={(e) => setLwfSlabWageLimit(parseFloat(e.target.value) || 0)} />
+          </label>
+          <div className="form-row">
+            <label>
+              Low slab — employee (₹)
+              <input type="number" step="0.01" value={lwfLowEmployeeAmt} onChange={(e) => setLwfLowEmployeeAmt(parseFloat(e.target.value) || 0)} />
+            </label>
+            <label>
+              Low slab — employer (₹)
+              <input type="number" step="0.01" value={lwfLowEmployerAmt} onChange={(e) => setLwfLowEmployerAmt(parseFloat(e.target.value) || 0)} />
+            </label>
+          </div>
+          <div className="form-row">
+            <label>
+              High slab — employee (₹)
+              <input type="number" step="0.01" value={lwfHighEmployeeAmt} onChange={(e) => setLwfHighEmployeeAmt(parseFloat(e.target.value) || 0)} />
+            </label>
+            <label>
+              High slab — employer (₹)
+              <input type="number" step="0.01" value={lwfHighEmployerAmt} onChange={(e) => setLwfHighEmployerAmt(parseFloat(e.target.value) || 0)} />
+            </label>
+          </div>
+        </div>
+
+        <button type="submit" className="btn-primary" style={{ marginTop: 20 }} disabled={saving}>
+          {saving ? "Saving..." : "Save Settings"}
+        </button>
+      </form>
     </div>
   );
 }

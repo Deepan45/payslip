@@ -31,6 +31,41 @@ model CompanySettings {
   officePhone String?
   email     String?
   website   String?
+
+  // --- Statutory registration IDs, printed on generated PF/ESI/LWF filing
+  // files. Left blank until the admin fills them in via Settings — every
+  // filing route still works without them (the file just prints a blank
+  // establishment ID), so this never blocks a first upload.
+  pfEstablishmentId String? // EPFO establishment ID, e.g. "MH/BAN/1234567/000"
+  esicEmployerCode  String? // 17-digit ESIC employer code
+  lwfRegistrationNo String?
+
+  // --- Statutory contribution rates, all admin-editable in Settings instead
+  // of hardcoded, since these are set by government notification and do
+  // change over time. Defaults are the commonly published current rates —
+  // verify against the live EPFO/ESIC/state LWF rules before a first real
+  // filing; do not trust the defaults blindly for a live challan/ECR.
+  epfEmployerEpsRate Float @default(8.33) // employer share -> EPS, % of EPS wages (capped at epsWageCeiling)
+  epfEmployerPfRate  Float @default(3.67) // employer share -> EPF proper, % of EPF wages (used as a fallback; the
+                                           // ECR generator actually computes this as 12% of EPF wages minus the
+                                           // EPS amount, which is only equal to this flat rate below the ceiling)
+  epfEdliRate        Float @default(0.5)  // employer -> EDLI insurance, % of EDLI wages (capped at epsWageCeiling)
+  epfAdminChargeRate Float @default(0.5)  // employer -> EPF admin charges, % of EPF wages
+  epfAdminChargeMin  Float @default(500)  // statutory minimum monthly EPF admin charge when there's >=1 member
+  epsWageCeiling     Float @default(15000) // EPS + EDLI contribution wage cap per member
+
+  esiEmployerRate  Float @default(3.25) // employer share, % of gross wages
+  esiWageCeiling   Float @default(21000) // gross wage ceiling for ESI applicability
+
+  // Maharashtra-style two-slab LWF: below/at the wage limit uses the "low"
+  // amounts, above it uses "high". Re-set these fields if a different
+  // state's LWF rules apply.
+  lwfSlabWageLimit   Float @default(3000)
+  lwfLowEmployeeAmt  Float @default(6)
+  lwfLowEmployerAmt  Float @default(18)
+  lwfHighEmployeeAmt Float @default(12)
+  lwfHighEmployerAmt Float @default(36)
+
   updatedAt DateTime @updatedAt
 }
 
@@ -95,6 +130,8 @@ model SalarySheet {
   client        Client         @relation(fields: [clientId], references: [id])
   clientId      String
   fileName      String
+  filePath      String? // the originally uploaded .xlsx, kept on disk so it can be re-downloaded later
+                         // (see storage/salary-sheets/<id>/); null for sheets uploaded before this existed
   periodMonth   Int
   periodYear    Int
   uploadedAt    DateTime       @default(now())
@@ -118,6 +155,7 @@ model SalaryRecord {
   basic           Float         @default(0)
   monthlySalary   Float         @default(0) // full monthly entitlement, unprorated — reference only, not part of Gross Earnings
   hra             Float         @default(0)
+  monthlyHra      Float         @default(0) // full monthly HRA entitlement, unprorated — reference only, mirrors monthlySalary
   incentive       Float         @default(0)
   otherEarnings   Json? // itemized breakdown of `incentive`'s source columns as [{ label, amount }], so the
                         // payslip can list each other-earning column (Arrear, Conveyance, ...) separately

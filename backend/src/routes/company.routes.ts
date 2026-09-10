@@ -24,17 +24,55 @@ companyRouter.get("/", requireAuth, async (_req, res) => {
 });
 
 companyRouter.put("/", requireAuth, async (req, res) => {
-  const { name, address, mobile, officePhone, email, website } = req.body as {
+  const {
+    name, address, mobile, officePhone, email, website,
+    pfEstablishmentId, esicEmployerCode, lwfRegistrationNo,
+    epfEmployerEpsRate, epfEmployerPfRate, epfEdliRate, epfAdminChargeRate, epfAdminChargeMin, epsWageCeiling,
+    esiEmployerRate, esiWageCeiling,
+    lwfSlabWageLimit, lwfLowEmployeeAmt, lwfLowEmployerAmt, lwfHighEmployeeAmt, lwfHighEmployerAmt,
+  } = req.body as {
     name?: string;
     address?: string;
     mobile?: string;
     officePhone?: string;
     email?: string;
     website?: string;
+    pfEstablishmentId?: string;
+    esicEmployerCode?: string;
+    lwfRegistrationNo?: string;
+    epfEmployerEpsRate?: number;
+    epfEmployerPfRate?: number;
+    epfEdliRate?: number;
+    epfAdminChargeRate?: number;
+    epfAdminChargeMin?: number;
+    epsWageCeiling?: number;
+    esiEmployerRate?: number;
+    esiWageCeiling?: number;
+    lwfSlabWageLimit?: number;
+    lwfLowEmployeeAmt?: number;
+    lwfLowEmployerAmt?: number;
+    lwfHighEmployeeAmt?: number;
+    lwfHighEmployerAmt?: number;
   };
   if (!name) return res.status(400).json({ error: "Company name is required" });
 
-  const data = { name, address, mobile, officePhone, email, website };
+  const data = {
+    name, address, mobile, officePhone, email, website,
+    pfEstablishmentId, esicEmployerCode, lwfRegistrationNo,
+    ...(epfEmployerEpsRate !== undefined && { epfEmployerEpsRate }),
+    ...(epfEmployerPfRate !== undefined && { epfEmployerPfRate }),
+    ...(epfEdliRate !== undefined && { epfEdliRate }),
+    ...(epfAdminChargeRate !== undefined && { epfAdminChargeRate }),
+    ...(epfAdminChargeMin !== undefined && { epfAdminChargeMin }),
+    ...(epsWageCeiling !== undefined && { epsWageCeiling }),
+    ...(esiEmployerRate !== undefined && { esiEmployerRate }),
+    ...(esiWageCeiling !== undefined && { esiWageCeiling }),
+    ...(lwfSlabWageLimit !== undefined && { lwfSlabWageLimit }),
+    ...(lwfLowEmployeeAmt !== undefined && { lwfLowEmployeeAmt }),
+    ...(lwfLowEmployerAmt !== undefined && { lwfLowEmployerAmt }),
+    ...(lwfHighEmployeeAmt !== undefined && { lwfHighEmployeeAmt }),
+    ...(lwfHighEmployerAmt !== undefined && { lwfHighEmployerAmt }),
+  };
   const existing = await prisma.companySettings.findFirst();
   const company = existing
     ? await prisma.companySettings.update({ where: { id: existing.id }, data })

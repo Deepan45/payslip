@@ -16,6 +16,7 @@ import { Settings } from "./pages/Settings";
 import { Clients } from "./pages/Clients";
 import { AdvanceLedger } from "./pages/AdvanceLedger";
 import { Reports } from "./pages/Reports";
+import { Statutory } from "./pages/Statutory";
 import { PortalLogin } from "./pages/portal/PortalLogin";
 import { PortalPayslips } from "./pages/portal/PortalPayslips";
 
@@ -41,6 +42,7 @@ export default function App() {
                   <Route path="payslips" element={<Payslips />} />
                   <Route path="advances" element={<AdvanceLedger />} />
                   <Route path="reports" element={<Reports />} />
+                  <Route path="statutory" element={<Statutory />} />
                   <Route path="settings" element={<Settings />} />
                 </Route>
               </Route>
