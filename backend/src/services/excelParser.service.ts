@@ -39,6 +39,7 @@ export type NumericField =
   | "basic"
   | "monthlySalary"
   | "hra"
+  | "monthlyHra"
   | "incentive"
   | "grossEarnings"
   | "pfSalaryAmt"
@@ -59,8 +60,8 @@ export const TEXT_FIELDS: TextField[] = [
 ];
 
 export const NUMERIC_FIELDS: NumericField[] = [
-  "paidDays", "otHours", "otAmount", "basic", "monthlySalary", "hra", "incentive", "grossEarnings", "pfSalaryAmt",
-  "esi", "epf", "lwf", "advance", "dressShoes", "otherDeduction", "totalDeductions", "netPay",
+  "paidDays", "otHours", "otAmount", "basic", "monthlySalary", "hra", "monthlyHra", "incentive", "grossEarnings",
+  "pfSalaryAmt", "esi", "epf", "lwf", "advance", "dressShoes", "otherDeduction", "totalDeductions", "netPay",
 ];
 
 export const REQUIRED_FIELDS: CanonicalField[] = ["employeeCode", "name"];
@@ -123,6 +124,9 @@ const HEADER_ALIASES: Record<string, CanonicalField> = {
 
   monthlysalary: "monthlySalary", monthlybasic: "monthlySalary", basicmonthly: "monthlySalary",
   monthlybasicsalary: "monthlySalary", fullbasic: "monthlySalary", basicentitlement: "monthlySalary",
+  master: "monthlySalary", // some sheets label the whole rate group (Basic/HRA/Gross) just "Master"
+
+  monthlyhra: "monthlyHra", hrarate: "monthlyHra", fullhra: "monthlyHra", hraentitlement: "monthlyHra",
 
   pfsalaryamt: "pfSalaryAmt", pfsalary: "pfSalaryAmt", pfsalaryamount: "pfSalaryAmt",
   pfbasicwages: "pfSalaryAmt", pfqualifyingwages: "pfSalaryAmt", pfwagebasis: "pfSalaryAmt",
@@ -249,6 +253,38 @@ export function readSheetGrid(buffer: Buffer): unknown[][] {
   return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true }) as unknown[][];
 }
 
+export interface MergeRange {
+  s: { r: number; c: number };
+  e: { r: number; c: number };
+}
+
+/** Reads the workbook's merged-cell ranges (e.g. a "MONTHLY SALARY" group header merged across its
+ *  Basic/HRA/Gross sub-columns) — used only to help SUGGEST a mapping (see mergedHeaderText below);
+ *  never affects parsing of already-confirmed mappings, which always reads by plain column index. */
+export function readSheetMerges(buffer: Buffer): MergeRange[] {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) return [];
+  const sheet = workbook.Sheets[firstSheetName];
+  return ((sheet["!merges"] as MergeRange[] | undefined) ?? []).map((m) => ({ s: { ...m.s }, e: { ...m.e } }));
+}
+
+/** A column's header text at `row`, falling back to its merge's anchor cell when the column's own
+ *  cell is blank — real sheets merge a group label (e.g. "MONTHLY SALARY") across several
+ *  sub-columns, and XLSX only keeps the text on the merge's top-left cell; every other cell in that
+ *  span reads as blank from the raw grid. Suggestion-only (see readSheetMerges) — never used for
+ *  fingerprinting, so it can't cause a saved mapping to falsely "drift" on a later upload. */
+function mergedHeaderText(grid: unknown[][], merges: MergeRange[], row: number, col: number): string {
+  const direct = cellText(grid[row], col);
+  if (direct) return direct;
+  for (const m of merges) {
+    if (row >= m.s.r && row <= m.e.r && col >= m.s.c && col <= m.e.c) {
+      return cellText(grid[m.s.r], m.s.c);
+    }
+  }
+  return "";
+}
+
 function fingerprintAt(grid: unknown[][], headerRowStart: number, headerRowEnd: number, columnIndex: number): string {
   const parts: string[] = [];
   for (let r = headerRowStart; r <= headerRowEnd; r++) {
@@ -311,7 +347,7 @@ export interface MappingSuggestion {
  * automatically — always returned for a human to confirm via the mapping
  * screen.
  */
-export function suggestColumnMapping(grid: unknown[][]): MappingSuggestion {
+export function suggestColumnMapping(grid: unknown[][], merges: MergeRange[] = []): MappingSuggestion {
   const cols = maxColumnCount(grid, 0, Math.min(grid.length, 8));
 
   let bestRow = 0;
@@ -345,7 +381,13 @@ export function suggestColumnMapping(grid: unknown[][]): MappingSuggestion {
   // only meaningful during suggestion — a saved ColumnMapping doesn't carry it.
   const matchConfidence: Partial<Record<CanonicalField, Map<number, MatchConfidence>>> = {};
   for (let c = 0; c < cols; c++) {
-    const topText = cellText(grid[headerRowStart], c);
+    // Merge-aware: a merged group label (e.g. "MONTHLY SALARY" spanning Basic/HRA/Gross
+    // sub-columns) only keeps its text on the merge's own anchor cell — every other column in
+    // that span reads blank from the raw grid. Falling back to the merge's anchor text here lets
+    // the "Monthly Salary"-group branch below recognize EVERY sub-column of that group, not just
+    // the first. Fingerprinting (fingerprintAt) deliberately does NOT use this fallback, so a
+    // saved mapping's stored fingerprint is unaffected and can't start "drifting" from this.
+    const topText = mergedHeaderText(grid, merges, headerRowStart, c);
     const subText = cellText(grid[headerRowEnd], c);
     const topMatch = topText ? lookupAlias(topText) : undefined;
     const subMatch = subText ? lookupAlias(subText) : undefined;
@@ -360,24 +402,34 @@ export function suggestColumnMapping(grid: unknown[][]): MappingSuggestion {
     // as a spurious candidate for that field, potentially outranking the
     // sheet's actual, correctly-labeled total column.
     //
-    // "Monthly Salary" is the opposite case: real sheets write it as exactly
-    // this kind of group label over a single "Basic" (or similarly generic)
-    // sub-column — that's the whole point of the field, distinguishing the
-    // full monthly entitlement from the prorated `basic` figure. Applying
-    // the "sub-label wins" rule there would silently throw the group label
-    // away and leave the column unmapped (worse, "Basic" as a sub-label
-    // would make it a candidate for `basic` itself, risking outranking the
-    // sheet's real earned-basic column). So this one group label always
-    // wins over its sub-label, rather than the reverse.
-    const rowsInBlock =
-      topMatch?.field === "monthlySalary"
-        ? [{ text: topText, match: topMatch }]
-        : subMatch && topMatch && subMatch.field !== topMatch.field
-          ? [{ text: subText, match: subMatch }]
-          : [
-              { text: topText, match: topMatch },
-              { text: subText, match: subMatch },
-            ];
+    // "Monthly Salary" is the opposite case: real sheets write it as a group
+    // label over a whole little Basic/HRA/Gross rate block — the whole point
+    // of the field is distinguishing each column's full monthly entitlement
+    // from its prorated, actually-payable counterpart elsewhere on the
+    // sheet. So this group label always wins over a generic/Basic sub-label
+    // (rather than the reverse) — but it still routes by the sub-label where
+    // that sub-label itself names another modeled rate field (HRA), so the
+    // group's Basic-rate and HRA-rate sub-columns land in their own distinct
+    // fields instead of collapsing together. A sub-column this doesn't
+    // recognize (e.g. a "Gross" rate column — not currently modeled as its
+    // own field) is left unmapped rather than misattributed to either.
+    let rowsInBlock: { text: string; match: AliasMatch | undefined }[];
+    if (topMatch?.field === "monthlySalary") {
+      if (subMatch?.field === "hra") {
+        rowsInBlock = [{ text: subText, match: { field: "monthlyHra", confidence: subMatch.confidence } }];
+      } else if (!subMatch || subMatch.field === "basic") {
+        rowsInBlock = [{ text: topText, match: topMatch }];
+      } else {
+        rowsInBlock = [];
+      }
+    } else if (subMatch && topMatch && subMatch.field !== topMatch.field) {
+      rowsInBlock = [{ text: subText, match: subMatch }];
+    } else {
+      rowsInBlock = [
+        { text: topText, match: topMatch },
+        { text: subText, match: subMatch },
+      ];
+    }
     for (const { match } of rowsInBlock) {
       if (!match) continue;
       const { field, confidence } = match;
@@ -474,6 +526,8 @@ export interface ParsedSalaryRow {
    *  Gross Earnings / Net Pay. */
   monthlySalary: number;
   hra: number;
+  /** Full monthly HRA entitlement (unprorated) — reference only, mirrors monthlySalary above. */
+  monthlyHra: number;
   incentive: number;
   otherEarnings: OtherEarningItem[];
   grossEarnings: number;
@@ -540,6 +594,7 @@ export function parseWithMapping(grid: unknown[][], mapping: ColumnMapping): Par
     const basic = numOf("basic", row);
     const monthlySalary = numOf("monthlySalary", row);
     const hra = numOf("hra", row);
+    const monthlyHra = numOf("monthlyHra", row);
     const incentive = numOf("incentive", row);
     // Same source columns as `incentive`, but kept as individual label+amount
     // entries (instead of only their sum) so the payslip can list each other
@@ -596,6 +651,7 @@ export function parseWithMapping(grid: unknown[][], mapping: ColumnMapping): Par
       basic,
       monthlySalary,
       hra,
+      monthlyHra,
       incentive,
       otherEarnings,
       grossEarnings,

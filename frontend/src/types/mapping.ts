@@ -4,8 +4,8 @@ export const TEXT_FIELDS = [
 ] as const;
 
 export const NUMERIC_FIELDS = [
-  "paidDays", "otHours", "otAmount", "basic", "monthlySalary", "hra", "incentive", "grossEarnings", "pfSalaryAmt",
-  "esi", "epf", "lwf", "advance", "dressShoes", "otherDeduction", "totalDeductions", "netPay",
+  "paidDays", "otHours", "otAmount", "basic", "monthlySalary", "hra", "monthlyHra", "incentive", "grossEarnings",
+  "pfSalaryAmt", "esi", "epf", "lwf", "advance", "dressShoes", "otherDeduction", "totalDeductions", "netPay",
 ] as const;
 
 export type TextField = (typeof TEXT_FIELDS)[number];
@@ -30,7 +30,8 @@ export const FIELD_LABELS: Record<CanonicalField, string> = {
   otAmount: "OT Amount",
   basic: "Earned Salary (Basic, prorated for days paid)",
   monthlySalary: "Monthly Salary (full entitlement, reference only)",
-  hra: "HRA",
+  hra: "Earned HRA (prorated for days paid)",
+  monthlyHra: "Monthly HRA (full entitlement, reference only)",
   incentive: "Incentive / Other Earnings",
   grossEarnings: "Gross Earnings (optional — auto-computed if unmapped)",
   pfSalaryAmt: "PF Salary Amt",
@@ -48,7 +49,7 @@ export const FIELD_GROUPS: { title: string; fields: CanonicalField[] }[] = [
   { title: "Identity", fields: ["employeeCode", "name", "guardianName", "gender", "designation", "department"] },
   { title: "Bank & Statutory IDs", fields: ["bankAccount", "ifscCode", "uanNo", "esiNo", "email", "phone"] },
   { title: "Attendance", fields: ["paidDays", "otHours", "otAmount"] },
-  { title: "Earnings", fields: ["basic", "monthlySalary", "hra", "incentive", "grossEarnings", "pfSalaryAmt"] },
+  { title: "Earnings", fields: ["basic", "monthlySalary", "hra", "monthlyHra", "incentive", "grossEarnings", "pfSalaryAmt"] },
   { title: "Deductions", fields: ["esi", "epf", "lwf", "advance", "dressShoes", "otherDeduction", "totalDeductions"] },
   { title: "Result", fields: ["netPay"] },
 ];

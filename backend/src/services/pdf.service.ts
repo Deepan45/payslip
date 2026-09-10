@@ -71,6 +71,8 @@ export interface PayslipPdfData {
      *  Rate of Pay); never summed into Gross Earnings / Net Pay, unlike `basic`. */
     monthlySalary: number;
     hra: number;
+    /** Full monthly HRA entitlement, unprorated — reference only, mirrors monthlySalary above. */
+    monthlyHra: number;
     otAmount: number;
     /** Other-earning source columns (Arrear, Conveyance, ...), each shown as its own line
      *  instead of one combined "Incentive / Other Earnings" total. */
@@ -253,16 +255,15 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
 
     // === Earnings / Deductions table ===
     // Earnings carry both a Rate of Pay and a Payable amount per line, shown as two columns
-    // (matching the client's paper payslip format). Only Basic actually has a distinct rate —
-    // data.earnings.monthlySalary is its full monthly entitlement, unprorated, while
-    // data.earnings.basic is what's actually payable for Paid Days and what feeds Total
-    // Earnings (A) / Gross Earnings / Net Pay. Every other line (HRA, OT, other earnings) has
-    // only a payable amount, so its Rate of Pay cell is left blank. Basic's rate is omitted
-    // (rather than shown as 0.00) when this client's sheet doesn't have a Monthly Salary column
-    // mapped yet.
+    // (matching the client's paper payslip format). Basic and HRA each have a distinct rate —
+    // data.earnings.monthlySalary / monthlyHra are their full monthly entitlement, unprorated,
+    // while data.earnings.basic / hra are what's actually payable for Paid Days and what feeds
+    // Total Earnings (A) / Gross Earnings / Net Pay. Every other line (OT, other earnings) has
+    // only a payable amount, so its Rate of Pay cell is left blank. A rate is omitted (rather
+    // than shown as 0.00) when this client's sheet doesn't have that Rate column mapped yet.
     const earningsRows: { label: string; rate?: number; payable: number }[] = [
       { label: "Basic", rate: data.earnings.monthlySalary > 0 ? data.earnings.monthlySalary : undefined, payable: data.earnings.basic },
-      { label: "House Rent Allowance (HRA)", payable: data.earnings.hra },
+      { label: "House Rent Allowance (HRA)", rate: data.earnings.monthlyHra > 0 ? data.earnings.monthlyHra : undefined, payable: data.earnings.hra },
       { label: "OT Amount", payable: data.earnings.otAmount },
       ...data.earnings.otherEarnings.map(({ label, amount }) => ({ label, payable: amount })),
     ];
