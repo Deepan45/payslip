@@ -66,6 +66,16 @@ model CompanySettings {
   lwfHighEmployeeAmt Float @default(12)
   lwfHighEmployerAmt Float @default(36)
 
+  // --- Billing / invoice info, printed on generated Client Bill PDFs
+  // (see bill.service.ts / pdf.service.ts). Purely informational — GSTIN is
+  // shown on the bill but no GST is computed or added to the total; bank
+  // details are for the client's reference when remitting payment.
+  gstin          String? // company's GST identification number
+  bankName       String?
+  bankAccountNo  String?
+  bankIfscCode   String?
+  billingTerms   String? // free-text payment terms/notes, e.g. "Payment due within 15 days of invoice date"
+
   updatedAt DateTime @updatedAt
 }
 
@@ -85,6 +95,7 @@ model Client {
   salarySheets  SalarySheet[]
   employees     Employee[] // employees currently deployed here (denormalized convenience pointer)
   columnProfile SiteColumnProfile?
+  clientBills   ClientBill[]
 }
 
 /// Saved Excel column mapping for one client's sheet layout, built once via
@@ -137,6 +148,41 @@ model SalarySheet {
   uploadedAt    DateTime       @default(now())
   recordCount   Int            @default(0)
   salaryRecords SalaryRecord[]
+  clientBill    ClientBill?
+
+  @@index([clientId, periodYear, periodMonth])
+}
+
+/// The client-facing bill for one uploaded sheet, generated automatically right after that
+/// sheet's payslips are — one bill per (client, period) upload. Wage cost is each employee's
+/// Gross Earnings plus the employer's share of PF/ESI/LWF (the agency fronts these, so they're
+/// billable), using the same per-employee formulas as the statutory filings in
+/// statutory.service.ts, so a bill's contribution figures always match what actually gets
+/// filed. Service charge is the client's billingRate (flat amount) times the employees billed
+/// this period; totals are snapshotted at generation time so a bill doesn't silently change if
+/// CompanySettings' contribution rates are edited later.
+model ClientBill {
+  id               String      @id @default(cuid())
+  sheet            SalarySheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  sheetId          String      @unique
+  client           Client      @relation(fields: [clientId], references: [id])
+  clientId         String
+  periodMonth      Int
+  periodYear       Int
+  employeeCount    Int
+  totalGrossWages  Float
+  totalEmployerEpf Float // employer EPS + EPF-diff + EDLI, summed
+  totalEmployerEsi Float
+  totalEmployerLwf Float
+  pfAdminCharge    Float // one establishment-level EPF admin charge, not per employee
+  billingRateUsed  Float? // Client.billingRate snapshot at generation time; null if never set
+  serviceCharge    Float // billingRateUsed * employeeCount
+  totalWageCost    Float // gross + employer epf/esi/lwf + pfAdminCharge
+  grandTotal       Float // totalWageCost + serviceCharge
+  lines            Json // itemized per-employee breakdown: [{ employeeId, employeeCode, name, designation,
+                         // paidDays, grossEarnings, employerEpf, employerEsi, employerLwf, wageCost }]
+  pdfPath          String
+  generatedAt      DateTime    @default(now())
 
   @@index([clientId, periodYear, periodMonth])
 }

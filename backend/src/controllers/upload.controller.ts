@@ -11,8 +11,9 @@ import {
   parseWithMapping,
   ColumnMapping,
 } from "../services/excelParser.service";
-import { generatePayslipPdf } from "../services/pdf.service";
+import { generatePayslipPdf, generateClientBillPdf } from "../services/pdf.service";
 import { buildSalarySheetTemplate } from "../services/template.service";
+import { computeClientBillForSheet } from "../services/bill.service";
 import { Prisma } from "@prisma/client";
 import { mapWithConcurrency } from "../utils/concurrency";
 
@@ -26,6 +27,7 @@ const UPLOAD_CONCURRENCY = 20;
 const PAYSLIP_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "payslips");
 const LOGO_DIR = path.join(__dirname, "..", "..", "storage", "logo");
 const SALARY_SHEET_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "salary-sheets");
+const BILL_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "bills");
 
 // CompanySettings.logoPath was historically stored as the full absolute path
 // returned by multer at upload time (see company.routes.ts) — which bakes in
@@ -311,11 +313,77 @@ export async function uploadSalarySheet(req: AuthedRequest, res: Response) {
     }
   });
 
+  // Client bill: computed from the SalaryRecords just written, then persisted as a PDF alongside
+  // the payslips — best-effort, same stance as the original-workbook save above, since the
+  // payslips already generated are what actually matters if this fails.
+  let bill: { id: string; grandTotal: number; employeeCount: number; serviceCharge: number; billingRateUsed: number | null } | null = null;
+  try {
+    const computed = await computeClientBillForSheet(sheet.id);
+    if (computed) {
+      const billNo = `BILL-${year}${String(month).padStart(2, "0")}-${sheet.id.slice(-8).toUpperCase()}`;
+      const pdfOutputPath = path.join(BILL_STORAGE_DIR, sheet.id, "bill.pdf");
+      await generateClientBillPdf(
+        {
+          company: {
+            name: company?.name ?? "Your Company",
+            address: company?.address,
+            logoPath: resolveLogoPath(company?.logoPath),
+            mobile: company?.mobile,
+            officePhone: company?.officePhone,
+            email: company?.email,
+            website: company?.website,
+            gstin: company?.gstin,
+            bankName: company?.bankName,
+            bankAccountNo: company?.bankAccountNo,
+            bankIfscCode: company?.bankIfscCode,
+            billingTerms: company?.billingTerms,
+          },
+          client: { name: client.name, address: client.address },
+          period: { month, year },
+          billNo,
+          lines: computed.lines,
+          totals: computed.totals,
+        },
+        pdfOutputPath
+      );
+      const created = await prisma.clientBill.create({
+        data: {
+          sheetId: sheet.id,
+          clientId,
+          periodMonth: month,
+          periodYear: year,
+          employeeCount: computed.totals.employeeCount,
+          totalGrossWages: computed.totals.totalGrossWages,
+          totalEmployerEpf: computed.totals.totalEmployerEpf,
+          totalEmployerEsi: computed.totals.totalEmployerEsi,
+          totalEmployerLwf: computed.totals.totalEmployerLwf,
+          pfAdminCharge: computed.totals.pfAdminCharge,
+          billingRateUsed: computed.totals.billingRateUsed,
+          serviceCharge: computed.totals.serviceCharge,
+          totalWageCost: computed.totals.totalWageCost,
+          grandTotal: computed.totals.grandTotal,
+          lines: computed.lines as unknown as Prisma.InputJsonValue,
+          pdfPath: pdfOutputPath,
+        },
+      });
+      bill = {
+        id: created.id,
+        grandTotal: created.grandTotal,
+        employeeCount: created.employeeCount,
+        serviceCharge: created.serviceCharge,
+        billingRateUsed: created.billingRateUsed,
+      };
+    }
+  } catch (err) {
+    console.error("Failed to generate client bill for sheet", sheet.id, err);
+  }
+
   res.status(201).json({
     sheet: { id: sheet.id, fileName: sheet.fileName, periodMonth: month, periodYear: year },
     generatedCount: generated.length,
     rowErrors: errors,
     generationErrors,
     generated,
+    bill,
   });
 }

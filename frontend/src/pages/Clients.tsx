@@ -13,18 +13,91 @@ interface ClientRow {
   address: string | null;
   contactPerson: string | null;
   contactPhone: string | null;
+  contactEmail: string | null;
+  billingRate: number | null;
   _count: { employees: number; salarySheets: number };
   columnProfile: { updatedAt: string } | null;
+}
+
+interface ClientFormValues {
+  name: string;
+  address: string;
+  contactPerson: string;
+  contactPhone: string;
+  contactEmail: string;
+  billingRate: string;
+}
+
+const EMPTY_FORM: ClientFormValues = { name: "", address: "", contactPerson: "", contactPhone: "", contactEmail: "", billingRate: "" };
+
+function toFormValues(c: ClientRow): ClientFormValues {
+  return {
+    name: c.name,
+    address: c.address ?? "",
+    contactPerson: c.contactPerson ?? "",
+    contactPhone: c.contactPhone ?? "",
+    contactEmail: c.contactEmail ?? "",
+    billingRate: c.billingRate != null ? String(c.billingRate) : "",
+  };
+}
+
+/** Every editable client field, shared by the "Add Client" form and the "Edit Client" modal. */
+function ClientFields({ values, onChange }: { values: ClientFormValues; onChange: (values: ClientFormValues) => void }) {
+  return (
+    <>
+      <label>
+        Client / Site name
+        <input
+          value={values.name}
+          onChange={(e) => onChange({ ...values, name: e.target.value })}
+          required
+          autoFocus
+          placeholder="e.g. Glen Appliances"
+        />
+      </label>
+      <div className="form-row">
+        <label>
+          Contact person
+          <input value={values.contactPerson} onChange={(e) => onChange({ ...values, contactPerson: e.target.value })} placeholder="e.g. Rakesh Sharma" />
+        </label>
+        <label>
+          Contact phone
+          <input value={values.contactPhone} onChange={(e) => onChange({ ...values, contactPhone: e.target.value })} placeholder="+91 XXXXX XXXXX" />
+        </label>
+      </div>
+      <label>
+        Contact email
+        <input
+          type="email"
+          value={values.contactEmail}
+          onChange={(e) => onChange({ ...values, contactEmail: e.target.value })}
+          placeholder="contact@client.com"
+        />
+      </label>
+      <label>
+        Address
+        <textarea value={values.address} onChange={(e) => onChange({ ...values, address: e.target.value })} rows={2} placeholder="Site / plant address" />
+      </label>
+      <label>
+        Billing rate (&#8377; per employee / month)
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          value={values.billingRate}
+          onChange={(e) => onChange({ ...values, billingRate: e.target.value })}
+          placeholder="e.g. 500 — service charge added per deployed employee on each bill"
+        />
+      </label>
+    </>
+  );
 }
 
 export function Clients() {
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
-  const [contactPerson, setContactPerson] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
+  const [createValues, setCreateValues] = useState<ClientFormValues>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -32,6 +105,10 @@ export function Clients() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<ClientRow | null>(null);
   const [confirmBulk, setConfirmBulk] = useState(false);
+  const [editingClient, setEditingClient] = useState<ClientRow | null>(null);
+  const [editValues, setEditValues] = useState<ClientFormValues>(EMPTY_FORM);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   function load() {
     setLoading(true);
@@ -100,17 +177,52 @@ export function Clients() {
     setError(null);
     setSaving(true);
     try {
-      await api.post("/clients", { name, address, contactPerson, contactPhone });
-      setName("");
-      setAddress("");
-      setContactPerson("");
-      setContactPhone("");
+      await api.post("/clients", {
+        name: createValues.name,
+        address: createValues.address,
+        contactPerson: createValues.contactPerson,
+        contactPhone: createValues.contactPhone,
+        contactEmail: createValues.contactEmail,
+        billingRate: createValues.billingRate.trim() ? Number(createValues.billingRate) : undefined,
+      });
+      setCreateValues(EMPTY_FORM);
       setShowForm(false);
       load();
     } catch (err) {
       setError(apiErrorMessage(err, "Failed to create client"));
     } finally {
       setSaving(false);
+    }
+  }
+
+  function startEdit(c: ClientRow) {
+    setEditingClient(c);
+    setEditValues(toFormValues(c));
+    setEditError(null);
+  }
+
+  async function handleEditSave(e: FormEvent) {
+    e.preventDefault();
+    if (!editingClient) return;
+    setEditError(null);
+    setEditSaving(true);
+    try {
+      const billingRateValue = editValues.billingRate.trim() ? Number(editValues.billingRate) : null;
+      const res = await api.put(`/clients/${editingClient.id}`, {
+        name: editValues.name,
+        address: editValues.address,
+        contactPerson: editValues.contactPerson,
+        contactPhone: editValues.contactPhone,
+        contactEmail: editValues.contactEmail,
+        billingRate: billingRateValue,
+      });
+      const updated = res.data.client as { name: string; address: string | null; contactPerson: string | null; contactPhone: string | null; contactEmail: string | null; billingRate: number | null };
+      setClients((prev) => prev.map((x) => (x.id === editingClient.id ? { ...x, ...updated } : x)));
+      setEditingClient(null);
+    } catch (err) {
+      setEditError(apiErrorMessage(err, "Failed to update client"));
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -148,24 +260,7 @@ export function Clients() {
 
         {showForm && (
           <form onSubmit={handleCreate} style={{ marginBottom: 20, maxWidth: 480 }}>
-            <label>
-              Client / Site name
-              <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus placeholder="e.g. Glen Appliances" />
-            </label>
-            <div className="form-row">
-              <label>
-                Contact person
-                <input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="e.g. Rakesh Sharma" />
-              </label>
-              <label>
-                Contact phone
-                <input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="+91 XXXXX XXXXX" />
-              </label>
-            </div>
-            <label>
-              Address
-              <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} placeholder="Site / plant address" />
-            </label>
+            <ClientFields values={createValues} onChange={setCreateValues} />
             <button type="submit" className="btn-primary" disabled={saving}>
               {saving ? "Saving..." : "Save Client"}
             </button>
@@ -188,6 +283,7 @@ export function Clients() {
                   <th>Contact</th>
                   <th className="num">Employees</th>
                   <th className="num">Sheets Uploaded</th>
+                  <th className="num">Billing Rate</th>
                   <th>Column Mapping</th>
                   <th></th>
                 </tr>
@@ -207,6 +303,9 @@ export function Clients() {
                     <td>{c.contactPerson ?? "-"}</td>
                     <td className="num">{c._count.employees}</td>
                     <td className="num">{c._count.salarySheets}</td>
+                    <td className="num">
+                      {c.billingRate != null ? `₹ ${c.billingRate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : <span className="muted">Not set</span>}
+                    </td>
                     <td>
                       {c.columnProfile ? (
                         <span className="badge badge-success">Configured</span>
@@ -221,6 +320,9 @@ export function Clients() {
                         </svg>
                         Upload
                       </Link>
+                      <ActionButton icon="edit" onClick={() => startEdit(c)}>
+                        Edit
+                      </ActionButton>
                       <ActionButton icon="delete" tone="danger" disabled={deletingId === c.id} onClick={() => setConfirmTarget(c)}>
                         {deletingId === c.id ? "Deleting..." : "Delete"}
                       </ActionButton>
@@ -232,6 +334,33 @@ export function Clients() {
           </div>
         )}
       </div>
+
+      {editingClient && (
+        <div className="modal-overlay" onClick={() => setEditingClient(null)}>
+          <div className="modal-panel" style={{ height: "auto", maxHeight: "88vh" }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit {editingClient.name}</h3>
+              <button className="btn-link" onClick={() => setEditingClient(null)} aria-label="Close">
+                &times;
+              </button>
+            </div>
+            <form onSubmit={handleEditSave}>
+              <div className="modal-body" style={{ overflow: "auto", padding: 20 }}>
+                {editError && <div className="alert alert-error">{editError}</div>}
+                <ClientFields values={editValues} onChange={setEditValues} />
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-link" onClick={() => setEditingClient(null)} style={{ margin: 0 }}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={editSaving}>
+                  {editSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmTarget !== null}

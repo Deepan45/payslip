@@ -26,6 +26,11 @@ interface Company {
   lwfLowEmployerAmt: number;
   lwfHighEmployeeAmt: number;
   lwfHighEmployerAmt: number;
+  gstin: string | null;
+  bankName: string | null;
+  bankAccountNo: string | null;
+  bankIfscCode: string | null;
+  billingTerms: string | null;
 }
 
 export function Settings() {
@@ -59,6 +64,14 @@ export function Settings() {
   const [lwfHighEmployeeAmt, setLwfHighEmployeeAmt] = useState(12);
   const [lwfHighEmployerAmt, setLwfHighEmployerAmt] = useState(36);
 
+  // Billing / invoice settings — printed on generated Client Bill PDFs (see the History page).
+  // Informational only: GSTIN is shown but no GST is computed or added to a bill's total.
+  const [gstin, setGstin] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankAccountNo, setBankAccountNo] = useState("");
+  const [bankIfscCode, setBankIfscCode] = useState("");
+  const [billingTerms, setBillingTerms] = useState("");
+
   function applyCompany(c: Company) {
     setCompany(c);
     setName(c.name);
@@ -83,6 +96,11 @@ export function Settings() {
     setLwfLowEmployerAmt(c.lwfLowEmployerAmt);
     setLwfHighEmployeeAmt(c.lwfHighEmployeeAmt);
     setLwfHighEmployerAmt(c.lwfHighEmployerAmt);
+    setGstin(c.gstin ?? "");
+    setBankName(c.bankName ?? "");
+    setBankAccountNo(c.bankAccountNo ?? "");
+    setBankIfscCode(c.bankIfscCode ?? "");
+    setBillingTerms(c.billingTerms ?? "");
   }
 
   useEffect(() => {
@@ -104,6 +122,7 @@ export function Settings() {
         epfEmployerEpsRate, epfEmployerPfRate, epfEdliRate, epfAdminChargeRate, epfAdminChargeMin, epsWageCeiling,
         esiEmployerRate, esiWageCeiling,
         lwfSlabWageLimit, lwfLowEmployeeAmt, lwfLowEmployerAmt, lwfHighEmployeeAmt, lwfHighEmployerAmt,
+        gstin, bankName, bankAccountNo, bankIfscCode, billingTerms,
       });
       applyCompany(res.data.company);
 
@@ -288,6 +307,53 @@ export function Settings() {
               <input type="number" step="0.01" value={lwfHighEmployerAmt} onChange={(e) => setLwfHighEmployerAmt(parseFloat(e.target.value) || 0)} />
             </label>
           </div>
+        </div>
+
+        <div className="card" style={{ maxWidth: 560, marginTop: 20 }}>
+          <div className="section-title" style={{ marginBottom: 16 }}>
+            <span className="section-title-icon stat-icon-aqua">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 10h20M6 15h2M2 6h20v12H2z" />
+              </svg>
+            </span>
+            <h2 style={{ margin: 0 }}>Billing / Invoice Settings</h2>
+          </div>
+          <p className="small" style={{ marginTop: -8, marginBottom: 16 }}>
+            Printed on every generated <strong>Client Bill</strong> (see a sheet's page in History). GSTIN is shown
+            for reference only — no GST is computed or added to a bill's total. Bank details and terms appear on the
+            bill so the client knows how and when to pay; leave any of these blank to omit that line.
+          </p>
+
+          <label>
+            GSTIN
+            <input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="e.g. 27AAAAA0000A1Z5" />
+          </label>
+
+          <p className="small" style={{ marginTop: 12, marginBottom: 4, fontWeight: 600 }}>Bank details</p>
+          <label>
+            Bank name
+            <input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. HDFC Bank, MG Road Branch" />
+          </label>
+          <div className="form-row">
+            <label>
+              Account number
+              <input value={bankAccountNo} onChange={(e) => setBankAccountNo(e.target.value)} placeholder="Bank account no." />
+            </label>
+            <label>
+              IFSC code
+              <input value={bankIfscCode} onChange={(e) => setBankIfscCode(e.target.value)} placeholder="e.g. HDFC0001234" />
+            </label>
+          </div>
+
+          <label>
+            Payment terms
+            <textarea
+              value={billingTerms}
+              onChange={(e) => setBillingTerms(e.target.value)}
+              rows={2}
+              placeholder="e.g. Payment due within 15 days of invoice date"
+            />
+          </label>
         </div>
 
         <button type="submit" className="btn-primary" style={{ marginTop: 20 }} disabled={saving}>

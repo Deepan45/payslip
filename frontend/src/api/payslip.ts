@@ -35,6 +35,13 @@ export async function downloadSalarySheetSource(sheetId: string, fallbackFileNam
   saveBlob(res.data, fileName);
 }
 
+/** Downloads the client bill PDF generated automatically when a sheet was uploaded. */
+export async function downloadClientBill(sheetId: string, fallbackFileName: string) {
+  const res = await api.get(`/history/${sheetId}/bill/download`, { responseType: "blob" });
+  const fileName = fileNameFromDisposition(res.headers["content-disposition"], fallbackFileName);
+  saveBlob(res.data, fileName);
+}
+
 export async function downloadSalarySheetTemplate() {
   const res = await api.get("/uploads/template", { responseType: "blob" });
   const fileName = fileNameFromDisposition(res.headers["content-disposition"], "Salary-Sheet-Template.xlsx");

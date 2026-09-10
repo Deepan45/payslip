@@ -25,6 +25,7 @@ interface UploadResult {
   generatedCount: number;
   rowErrors: { rowNumber: number; message: string }[];
   generationErrors: { employeeCode: string; message: string }[];
+  bill: { id: string; grandTotal: number; employeeCount: number; serviceCharge: number; billingRateUsed: number | null } | null;
 }
 
 interface ExistingSheet {
@@ -351,6 +352,19 @@ export function Upload() {
           <p>
             Generated <strong>{result.generatedCount}</strong> payslip(s) from {result.sheet.fileName}.
           </p>
+
+          {result.bill && (
+            <p>
+              Client bill generated: <strong>&#8377; {result.bill.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong>{" "}
+              for {result.bill.employeeCount} employee(s)
+              {result.bill.billingRateUsed == null && (
+                <span className="badge badge-warn" style={{ marginLeft: 8 }}>
+                  No billing rate set — wage cost only
+                </span>
+              )}
+              .
+            </p>
+          )}
 
           {result.rowErrors.length > 0 && (
             <>

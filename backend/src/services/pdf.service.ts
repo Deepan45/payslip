@@ -417,3 +417,368 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     stream.on("error", reject);
   });
 }
+
+// ============================================================================
+// Client Bill — one PDF per uploaded sheet, listing every deployed employee's
+// wage cost (Gross Earnings + employer PF/ESI/LWF) plus the per-employee
+// service charge, generated automatically alongside that sheet's payslips.
+// ============================================================================
+
+export interface ClientBillPdfData {
+  company: {
+    name: string;
+    address?: string | null;
+    logoPath?: string | null;
+    mobile?: string | null;
+    officePhone?: string | null;
+    email?: string | null;
+    website?: string | null;
+    gstin?: string | null;
+    bankName?: string | null;
+    bankAccountNo?: string | null;
+    bankIfscCode?: string | null;
+    billingTerms?: string | null;
+  };
+  client: { name: string; address?: string | null };
+  period: { month: number; year: number };
+  billNo: string;
+  lines: {
+    employeeCode: string;
+    name: string;
+    paidDays: number;
+    grossEarnings: number;
+    employerEpf: number;
+    employerEsi: number;
+    employerLwf: number;
+    wageCost: number;
+  }[];
+  totals: {
+    employeeCount: number;
+    totalGrossWages: number;
+    totalEmployerEpf: number;
+    totalEmployerEsi: number;
+    totalEmployerLwf: number;
+    pfAdminCharge: number;
+    billingRateUsed: number | null;
+    serviceCharge: number;
+    totalWageCost: number;
+    grandTotal: number;
+  };
+}
+
+// Column layout for the employee table — widths sum exactly to PAGE_WIDTH (495pt).
+const BILL_COLS = [
+  { key: "code", label: "Emp. Code", width: 50, align: "left" as const },
+  { key: "name", label: "Name", width: 110, align: "left" as const },
+  { key: "days", label: "Paid Days", width: 35, align: "right" as const },
+  { key: "gross", label: "Gross Wages", width: 65, align: "right" as const },
+  { key: "epf", label: "Employer EPF", width: 60, align: "right" as const },
+  { key: "esi", label: "Employer ESI", width: 55, align: "right" as const },
+  { key: "lwf", label: "Employer LWF", width: 55, align: "right" as const },
+  { key: "cost", label: "Wage Cost", width: 65, align: "right" as const },
+];
+
+/**
+ * Renders a single client bill PDF to `outputPath`. Resolves once the file
+ * has been fully written to disk.
+ */
+export function generateClientBillPdf(data: ClientBillPdfData, outputPath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+
+    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    const stream = fs.createWriteStream(outputPath);
+    doc.pipe(stream);
+
+    // === Header: logo + company block (left), CLIENT BILL + period (right) ===
+    const headerTop = doc.y;
+    let logoDrawn = false;
+    const LOGO_SIZE = 90;
+    if (data.company.logoPath && fs.existsSync(data.company.logoPath)) {
+      try {
+        doc.image(data.company.logoPath, PAGE_LEFT, headerTop, { width: LOGO_SIZE, height: LOGO_SIZE, fit: [LOGO_SIZE, LOGO_SIZE] });
+        logoDrawn = true;
+      } catch {
+        // Ignore unreadable/unsupported logo files rather than failing generation.
+      }
+    }
+
+    const textX = logoDrawn ? PAGE_LEFT + LOGO_SIZE + 14 : PAGE_LEFT;
+    const textW = HEADER_SPLIT_X - HEADER_GUTTER - textX;
+    let ly = headerTop;
+    doc.font("Helvetica-Bold").fontSize(17).fillColor(NAVY).text(data.company.name, textX, ly, { width: textW });
+    ly = doc.y + 2;
+
+    doc.font("Helvetica").fontSize(8).fillColor(GRAY);
+    if (data.company.address) {
+      doc.text(data.company.address, textX, ly, { width: textW });
+      ly = doc.y + 1;
+    }
+    const contactLine1 = [data.company.mobile, data.company.officePhone].filter(Boolean).join("   |   ");
+    if (contactLine1) {
+      doc.text(contactLine1, textX, ly, { width: textW });
+      ly = doc.y + 1;
+    }
+    const contactLine2 = [data.company.email, data.company.website].filter(Boolean).join("   |   ");
+    if (contactLine2) {
+      doc.text(contactLine2, textX, ly, { width: textW });
+      ly = doc.y + 1;
+    }
+    if (data.company.gstin) {
+      doc.text(`GSTIN: ${data.company.gstin}`, textX, ly, { width: textW });
+      ly = doc.y + 1;
+    }
+
+    const headerRightW = PAGE_RIGHT - HEADER_SPLIT_X;
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(20)
+      .fillColor(NAVY)
+      .text("CLIENT BILL", HEADER_SPLIT_X, headerTop, { width: headerRightW, align: "right" });
+    doc
+      .font("Helvetica")
+      .fontSize(9.5)
+      .fillColor(NAVY_MUTED)
+      .text(
+        `For the Month of ${MONTH_NAMES[data.period.month - 1] ?? data.period.month} ${data.period.year}`,
+        HEADER_SPLIT_X,
+        doc.y + 2,
+        { width: headerRightW, align: "right" }
+      );
+    doc.fillColor("black");
+
+    const headerBottom = Math.max(ly, doc.y, headerTop + LOGO_SIZE) + 8;
+
+    const gradient = doc.linearGradient(PAGE_LEFT, headerBottom, PAGE_RIGHT, headerBottom);
+    gradient.stop(0, NAVY).stop(0.75, NAVY).stop(0.75, FLAME_ORANGE).stop(1, FLAME_RED);
+    doc.rect(PAGE_LEFT, headerBottom, PAGE_WIDTH, 3).fill(gradient);
+    doc.y = headerBottom + 16;
+
+    // === Bill To (left) / Bill Details (right) ===
+    function detailsBox(x: number, w: number, title: string, rows: [string, string][]) {
+      const boxTop = doc.y;
+      const barH = 18;
+      doc.rect(x, boxTop, w, barH).fill(NAVY);
+      doc.font("Helvetica-Bold").fontSize(8.5).fillColor(WHITE).text(title, x + 8, boxTop + 5);
+
+      const rowH = 16;
+      const bodyH = rows.length * rowH + 8;
+      doc.rect(x, boxTop + barH, w, bodyH).fill(LIGHT_FILL);
+
+      const labelW = 92;
+      rows.forEach(([label, value], i) => {
+        const ry = boxTop + barH + 6 + i * rowH;
+        doc.font("Helvetica-Bold").fontSize(8.5).fillColor(NAVY_MUTED).text(label, x + 8, ry, { width: labelW });
+        doc.font("Helvetica").fillColor("black").text(value || "-", x + 8 + labelW, ry, { width: w - labelW - 16 });
+      });
+
+      return boxTop + barH + bodyH;
+    }
+
+    const billToRows: [string, string][] = [
+      ["Client / Site", data.client.name],
+      ["Address", data.client.address ?? "-"],
+    ];
+    const billDetailRows: [string, string][] = [
+      ["Bill No.", data.billNo],
+      ["Pay Period", `${MONTH_NAMES[data.period.month - 1]} ${data.period.year}`],
+      ["Employees Billed", `${data.totals.employeeCount}`],
+      ["Rate / Employee", data.totals.billingRateUsed != null ? `Rs. ${formatCurrency(data.totals.billingRateUsed)}` : "Not set"],
+    ];
+
+    const detailsTop = doc.y;
+    const leftBottom = detailsBox(PAGE_LEFT, COL_WIDTH, "BILL TO", billToRows);
+    doc.y = detailsTop;
+    const rightBottom = detailsBox(RIGHT_COL_X, COL_WIDTH, "BILL DETAILS", billDetailRows);
+    doc.y = Math.max(leftBottom, rightBottom) + 18;
+
+    // === Employee wage-cost table (paginated — a sheet can run 1000+ rows) ===
+    const tableHeaderH = 20;
+    const tableRowH = 16;
+    const PAGE_BOTTOM = doc.page.height - 60; // leave room to finish a row before the margin
+
+    function drawTableHeader() {
+      const y = doc.y;
+      doc.rect(PAGE_LEFT, y, PAGE_WIDTH, tableHeaderH).fill(NAVY);
+      doc.font("Helvetica-Bold").fontSize(7.5).fillColor(WHITE);
+      let cx = PAGE_LEFT;
+      for (const col of BILL_COLS) {
+        doc.text(col.label, cx + 6, y + 6, { width: col.width - 8, align: col.align });
+        cx += col.width;
+      }
+      doc.fillColor("black");
+      doc.y = y + tableHeaderH;
+    }
+
+    doc.font("Helvetica-Bold").fontSize(9.5).fillColor(NAVY).text("EMPLOYEE-WISE WAGE COST", PAGE_LEFT, doc.y);
+    doc.y += 4;
+    doc.fillColor("black");
+    drawTableHeader();
+
+    doc.font("Helvetica").fontSize(8).fillColor("black");
+    data.lines.forEach((l, i) => {
+      if (doc.y + tableRowH > PAGE_BOTTOM) {
+        doc.addPage();
+        doc.y = 50;
+        drawTableHeader();
+        doc.font("Helvetica").fontSize(8).fillColor("black");
+      }
+      const rowY = doc.y;
+      if (i % 2 === 1) doc.rect(PAGE_LEFT, rowY, PAGE_WIDTH, tableRowH).fill(LIGHT_FILL);
+      doc.fillColor("black");
+      const cells = [
+        l.employeeCode,
+        l.name,
+        `${l.paidDays}`,
+        formatCurrency(l.grossEarnings),
+        formatCurrency(l.employerEpf),
+        formatCurrency(l.employerEsi),
+        formatCurrency(l.employerLwf),
+        formatCurrency(l.wageCost),
+      ];
+      let cx = PAGE_LEFT;
+      BILL_COLS.forEach((col, ci) => {
+        doc.text(cells[ci], cx + 6, rowY + 4, { width: col.width - 8, align: col.align });
+        cx += col.width;
+      });
+      doc.y = rowY + tableRowH;
+    });
+
+    doc.y += 12;
+
+    // === Totals summary (kept together — start a fresh page if it won't fit) ===
+    const SUMMARY_BLOCK_H = 210;
+    if (doc.y + SUMMARY_BLOCK_H > doc.page.height - 50) {
+      doc.addPage();
+      doc.y = 50;
+    }
+
+    const summaryRows: [string, number][] = [
+      ["Total Gross Wages", data.totals.totalGrossWages],
+      ["Total Employer EPF (EPS + EPF diff + EDLI)", data.totals.totalEmployerEpf],
+      ["Total Employer ESI", data.totals.totalEmployerEsi],
+      ["Total Employer LWF", data.totals.totalEmployerLwf],
+      ["PF Administrative Charges", data.totals.pfAdminCharge],
+    ];
+    const summaryX = RIGHT_COL_X;
+    const summaryW = COL_WIDTH;
+    const summaryLabelW = summaryW - 78;
+    let sy = doc.y;
+    doc.font("Helvetica-Bold").fontSize(9.5).fillColor(NAVY).text("BILL SUMMARY", PAGE_LEFT, sy);
+    sy = doc.y + 8;
+    const rowsTop = sy;
+
+    doc.font("Helvetica").fontSize(8.5).fillColor("black");
+    for (const [label, amount] of summaryRows) {
+      doc.text(label, summaryX, sy, { width: summaryLabelW });
+      doc.text(formatCurrency(amount), summaryX + summaryLabelW, sy, { width: 78, align: "right" });
+      sy += 15;
+    }
+
+    // Payment details, left column — only shown once any of it is actually configured in Settings.
+    if (data.company.bankName || data.company.bankAccountNo || data.company.bankIfscCode || data.company.billingTerms) {
+      let py = rowsTop;
+      doc.font("Helvetica-Bold").fontSize(8.5).fillColor(NAVY_MUTED).text("PAYMENT DETAILS", PAGE_LEFT, py, { width: COL_WIDTH });
+      py = doc.y + 4;
+      doc.font("Helvetica").fontSize(8.5).fillColor("black");
+      if (data.company.bankName) {
+        doc.text(`Bank: ${data.company.bankName}`, PAGE_LEFT, py, { width: COL_WIDTH });
+        py = doc.y + 2;
+      }
+      if (data.company.bankAccountNo) {
+        doc.text(`A/c No.: ${data.company.bankAccountNo}`, PAGE_LEFT, py, { width: COL_WIDTH });
+        py = doc.y + 2;
+      }
+      if (data.company.bankIfscCode) {
+        doc.text(`IFSC: ${data.company.bankIfscCode}`, PAGE_LEFT, py, { width: COL_WIDTH });
+        py = doc.y + 2;
+      }
+      if (data.company.billingTerms) {
+        doc.font("Helvetica-Oblique").fillColor(NAVY_MUTED).text(data.company.billingTerms, PAGE_LEFT, py + 4, { width: COL_WIDTH });
+        doc.font("Helvetica").fillColor("black");
+      }
+    }
+
+    doc.moveTo(summaryX, sy + 2).lineTo(summaryX + summaryW, sy + 2).strokeColor(LIGHT_FILL_STRONG).lineWidth(0.5).stroke();
+    sy += 9;
+    doc.font("Helvetica-Bold").fillColor(NAVY);
+    doc.text("Total Wage Cost", summaryX, sy, { width: summaryLabelW });
+    doc.text(formatCurrency(data.totals.totalWageCost), summaryX + summaryLabelW, sy, { width: 78, align: "right" });
+    sy += 17;
+
+    doc.font("Helvetica").fillColor("black");
+    doc.text(`Service Charge (${data.totals.employeeCount} x Rs. ${data.totals.billingRateUsed != null ? formatCurrency(data.totals.billingRateUsed) : "0.00"})`, summaryX, sy, {
+      width: summaryLabelW,
+    });
+    doc.text(formatCurrency(data.totals.serviceCharge), summaryX + summaryLabelW, sy, { width: 78, align: "right" });
+    sy += 20;
+
+    doc.y = sy + 6;
+
+    // === Grand Total: two-tone bar ===
+    const netTop = doc.y;
+    const netH = 40;
+    const netAmountW = 170;
+    doc.rect(PAGE_LEFT, netTop, PAGE_WIDTH - netAmountW, netH).fill(LIGHT_FILL_STRONG);
+    doc.rect(PAGE_RIGHT - netAmountW, netTop, netAmountW, netH).fill(NAVY);
+    doc.font("Helvetica-Bold").fontSize(12).fillColor(NAVY).text("Grand Total", PAGE_LEFT + 14, netTop + 13);
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(17)
+      .fillColor(WHITE)
+      .text(`Rs. ${formatCurrency(data.totals.grandTotal)}`, PAGE_RIGHT - netAmountW, netTop + 11, { width: netAmountW - 14, align: "right" });
+    doc.fillColor("black");
+
+    doc.y = netTop + netH + 10;
+    doc
+      .font("Helvetica-Oblique")
+      .fontSize(8.5)
+      .fillColor(NAVY_MUTED)
+      .text(`Amount in Words: ${amountInWords(data.totals.grandTotal)}`, PAGE_LEFT, doc.y, { width: PAGE_WIDTH });
+    doc.fillColor("black");
+
+    if (data.totals.billingRateUsed == null) {
+      doc.y += 10;
+      doc
+        .font("Helvetica-Oblique")
+        .fontSize(8)
+        .fillColor(FLAME_RED)
+        .text("Note: no billing/service-charge rate is set for this client yet — the total above is wage cost only.", PAGE_LEFT, doc.y, {
+          width: PAGE_WIDTH,
+        });
+      doc.fillColor("black");
+    }
+
+    // === Footer ===
+    const footerY = doc.page.height - 135;
+    if (doc.y > footerY - 20) {
+      doc.addPage();
+    }
+    doc.moveTo(PAGE_LEFT, footerY).lineTo(PAGE_RIGHT, footerY).strokeColor(LIGHT_FILL_STRONG).lineWidth(0.75).stroke();
+    doc
+      .fontSize(8)
+      .font("Helvetica")
+      .fillColor(GRAY)
+      .text("This is a system-generated bill.", PAGE_LEFT, footerY + 10, { width: 320 });
+
+    if (fs.existsSync(SIGNATURE_PATH)) {
+      try {
+        const sigX = PAGE_RIGHT - SIGNATURE_SIZE;
+        doc.image(SIGNATURE_PATH, sigX, footerY + 8, { width: SIGNATURE_SIZE, height: SIGNATURE_SIZE, fit: [SIGNATURE_SIZE, SIGNATURE_SIZE] });
+        doc
+          .font("Helvetica")
+          .fontSize(8)
+          .fillColor(GRAY)
+          .text("Authorized Signatory", PAGE_RIGHT - 130, footerY + 8 + SIGNATURE_SIZE + 3, { width: 130, align: "right" });
+        doc.fillColor("black");
+      } catch (err) {
+        console.error("[pdf.service] Failed to draw signature stamp on client bill:", err);
+      }
+    }
+
+    doc.end();
+
+    stream.on("finish", () => resolve(outputPath));
+    stream.on("error", reject);
+  });
+}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { api, apiErrorMessage } from "../api/client";
-import { downloadPayslip, downloadAllPayslipsForSheet, downloadSalarySheetSource } from "../api/payslip";
+import { downloadPayslip, downloadAllPayslipsForSheet, downloadSalarySheetSource, downloadClientBill } from "../api/payslip";
 import { Pagination } from "../components/Pagination";
 import { PayslipPreviewModal } from "../components/PayslipPreviewModal";
 import { ActionButton } from "../components/ActionButton";
@@ -22,6 +22,21 @@ interface Record {
   payslip: { id: string } | null;
 }
 
+interface ClientBillSummary {
+  id: string;
+  employeeCount: number;
+  totalGrossWages: number;
+  totalEmployerEpf: number;
+  totalEmployerEsi: number;
+  totalEmployerLwf: number;
+  pfAdminCharge: number;
+  billingRateUsed: number | null;
+  serviceCharge: number;
+  totalWageCost: number;
+  grandTotal: number;
+  generatedAt: string;
+}
+
 interface SheetDetail {
   id: string;
   fileName: string;
@@ -31,6 +46,7 @@ interface SheetDetail {
   uploadedAt: string;
   client: { id: string; name: string };
   salaryRecords: Record[];
+  clientBill: ClientBillSummary | null;
 }
 
 export function HistoryDetail() {
@@ -40,6 +56,7 @@ export function HistoryDetail() {
   const [loading, setLoading] = useState(true);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [sourceDownloading, setSourceDownloading] = useState(false);
+  const [billDownloading, setBillDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -80,6 +97,19 @@ export function HistoryDetail() {
       setError(apiErrorMessage(err, "Failed to download the original sheet"));
     } finally {
       setSourceDownloading(false);
+    }
+  }
+
+  async function handleDownloadBill() {
+    if (!sheetId || !sheet) return;
+    setError(null);
+    setBillDownloading(true);
+    try {
+      await downloadClientBill(sheetId, `Bill-${sheet.client.name}-${MONTH_NAMES[sheet.periodMonth - 1]}-${sheet.periodYear}.pdf`);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Failed to download the bill"));
+    } finally {
+      setBillDownloading(false);
     }
   }
 
@@ -170,6 +200,38 @@ export function HistoryDetail() {
       <p className="muted">
         {sheet.client.name} &middot; {sheet.fileName} &middot; uploaded {new Date(sheet.uploadedAt).toLocaleString()}
       </p>
+
+      {sheet.clientBill && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="toolbar" style={{ justifyContent: "space-between", gap: 10 }}>
+            <div>
+              <h2 style={{ margin: 0 }}>Client Bill</h2>
+              <p className="muted small" style={{ margin: "4px 0 0" }}>
+                {sheet.clientBill.employeeCount} employees &middot; wage cost &#8377;{" "}
+                {sheet.clientBill.totalWageCost.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                {sheet.clientBill.billingRateUsed != null ? (
+                  <>
+                    {" "}
+                    + service charge &#8377; {sheet.clientBill.serviceCharge.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </>
+                ) : (
+                  <span className="badge badge-warn" style={{ marginLeft: 8 }}>
+                    No billing rate set for this client
+                  </span>
+                )}
+              </p>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 22, fontWeight: 700 }}>
+                &#8377; {sheet.clientBill.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              </div>
+              <ActionButton icon="download" disabled={billDownloading} onClick={handleDownloadBill}>
+                {billDownloading ? "Downloading..." : "Download Bill"}
+              </ActionButton>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         {error && <div className="alert alert-error">{error}</div>}

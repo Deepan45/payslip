@@ -72,6 +72,49 @@ export async function getCompanySettings(): Promise<CompanySettings> {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // --------------------------------------------------------------------------
+// Shared per-employee employer-contribution math — used by the PF/ESI/LWF
+// filing builders below AND by bill.service.ts (client billing), so a
+// bill's employer-contribution figures always match what actually gets
+// filed for the same period instead of drifting from a second formula.
+// --------------------------------------------------------------------------
+
+/** Employer-side EPF cost for one employee this period: EPS + the EPF-proper diff + EDLI. */
+export function employerEpfForRow(pfSalaryAmt: number, company: CompanySettings): {
+  epsContriEmployer: number;
+  epfContriEmployerDiff: number;
+  edli: number;
+} {
+  if (pfSalaryAmt <= 0) return { epsContriEmployer: 0, epfContriEmployerDiff: 0, edli: 0 };
+  const epfWages = round2(pfSalaryAmt);
+  const epsWages = round2(Math.min(pfSalaryAmt, company.epsWageCeiling));
+  const edliWages = round2(Math.min(pfSalaryAmt, company.epsWageCeiling));
+  const employerTotal12pc = epfWages * 0.12;
+  const epsContriEmployer = round2(epsWages * (company.epfEmployerEpsRate / 100));
+  const epfContriEmployerDiff = round2(employerTotal12pc - epsContriEmployer);
+  const edli = round2(edliWages * (company.epfEdliRate / 100));
+  return { epsContriEmployer, epfContriEmployerDiff, edli };
+}
+
+/** Employer-side ESI cost for one employee this period — only applies if the employee is on ESI (`esiDeducted` > 0). */
+export function employerEsiForRow(grossEarnings: number, esiDeducted: number, company: CompanySettings): number {
+  if (esiDeducted <= 0) return 0;
+  return round2(grossEarnings * (company.esiEmployerRate / 100));
+}
+
+/** Employer-side LWF cost for one employee this period, two-slab (matches buildLwfChallanRows). */
+export function employerLwfForRow(grossEarnings: number, company: CompanySettings): number {
+  if (grossEarnings <= 0) return 0;
+  const lowSlab = grossEarnings <= company.lwfSlabWageLimit;
+  return lowSlab ? company.lwfLowEmployerAmt : company.lwfHighEmployerAmt;
+}
+
+/** Establishment-level EPF admin charge for a batch of members — not divisible per employee. */
+export function pfAdminChargeForBatch(totalEpfWages: number, memberCount: number, company: CompanySettings): number {
+  if (memberCount === 0) return 0;
+  return round2(Math.max(totalEpfWages * (company.epfAdminChargeRate / 100), company.epfAdminChargeMin));
+}
+
+// --------------------------------------------------------------------------
 // PF — EPFO ECR file
 // --------------------------------------------------------------------------
 

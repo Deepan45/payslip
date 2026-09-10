@@ -8,6 +8,7 @@ export const historyRouter = Router();
 
 const PAYSLIP_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "payslips");
 const SALARY_SHEET_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "salary-sheets");
+const BILL_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "bills");
 
 /**
  * Deletes a set of SalaryRecords (and everything hanging off them) cleanly:
@@ -72,6 +73,24 @@ historyRouter.get("/:sheetId", requireAuth, async (req, res) => {
         include: { employee: true, payslip: true },
         orderBy: { employee: { name: "asc" } },
       },
+      // Totals only here (not the itemized `lines` JSON) — the detail page just shows a summary
+      // card + a download-PDF button, so the per-employee breakdown doesn't need to round-trip.
+      clientBill: {
+        select: {
+          id: true,
+          employeeCount: true,
+          totalGrossWages: true,
+          totalEmployerEpf: true,
+          totalEmployerEsi: true,
+          totalEmployerLwf: true,
+          pfAdminCharge: true,
+          billingRateUsed: true,
+          serviceCharge: true,
+          totalWageCost: true,
+          grandTotal: true,
+          generatedAt: true,
+        },
+      },
     },
   });
   if (!sheet) return res.status(404).json({ error: "Sheet not found" });
@@ -94,6 +113,34 @@ historyRouter.get("/:sheetId/download", requireAuth, async (req, res) => {
     return res.status(404).json({ error: "The original file is missing from storage." });
   }
   res.download(diskPath, sheet.fileName);
+});
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+// Downloads the client bill PDF generated automatically when this sheet was uploaded. 404s for
+// sheets uploaded before this feature existed, or if bill generation failed at upload time.
+historyRouter.get("/:sheetId/bill/download", requireAuth, async (req, res) => {
+  const sheet = await prisma.salarySheet.findUnique({
+    where: { id: req.params.sheetId },
+    select: {
+      periodMonth: true,
+      periodYear: true,
+      client: { select: { name: true } },
+      clientBill: { select: { pdfPath: true } },
+    },
+  });
+  if (!sheet) return res.status(404).json({ error: "Sheet not found" });
+  if (!sheet.clientBill) {
+    return res.status(404).json({ error: "No bill was generated for this sheet (uploaded before this feature existed, or generation failed)." });
+  }
+  if (!fs.existsSync(sheet.clientBill.pdfPath)) {
+    return res.status(404).json({ error: "The bill PDF is missing from storage." });
+  }
+  const label = `${sheet.client.name}-${MONTH_NAMES[sheet.periodMonth - 1]}-${sheet.periodYear}`.replace(/[^\w.\- ]/g, "_");
+  res.download(sheet.clientBill.pdfPath, `Bill-${label}.pdf`);
 });
 
 // Bulk-delete specific payslips (salary records) within one sheet — the
@@ -137,6 +184,7 @@ async function deleteSheet(sheetId: string): Promise<{ ok: true } | { ok: false 
   // its saved original workbook.
   fs.rm(path.join(PAYSLIP_STORAGE_DIR, sheet.id), { recursive: true, force: true }, () => {});
   fs.rm(path.join(SALARY_SHEET_STORAGE_DIR, sheet.id), { recursive: true, force: true }, () => {});
+  fs.rm(path.join(BILL_STORAGE_DIR, sheet.id), { recursive: true, force: true }, () => {});
 
   return { ok: true };
 }

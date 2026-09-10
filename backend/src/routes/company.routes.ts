@@ -30,6 +30,7 @@ companyRouter.put("/", requireAuth, async (req, res) => {
     epfEmployerEpsRate, epfEmployerPfRate, epfEdliRate, epfAdminChargeRate, epfAdminChargeMin, epsWageCeiling,
     esiEmployerRate, esiWageCeiling,
     lwfSlabWageLimit, lwfLowEmployeeAmt, lwfLowEmployerAmt, lwfHighEmployeeAmt, lwfHighEmployerAmt,
+    gstin, bankName, bankAccountNo, bankIfscCode, billingTerms,
   } = req.body as {
     name?: string;
     address?: string;
@@ -53,12 +54,18 @@ companyRouter.put("/", requireAuth, async (req, res) => {
     lwfLowEmployerAmt?: number;
     lwfHighEmployeeAmt?: number;
     lwfHighEmployerAmt?: number;
+    gstin?: string;
+    bankName?: string;
+    bankAccountNo?: string;
+    bankIfscCode?: string;
+    billingTerms?: string;
   };
   if (!name) return res.status(400).json({ error: "Company name is required" });
 
   const data = {
     name, address, mobile, officePhone, email, website,
     pfEstablishmentId, esicEmployerCode, lwfRegistrationNo,
+    gstin, bankName, bankAccountNo, bankIfscCode, billingTerms,
     ...(epfEmployerEpsRate !== undefined && { epfEmployerEpsRate }),
     ...(epfEmployerPfRate !== undefined && { epfEmployerPfRate }),
     ...(epfEdliRate !== undefined && { epfEdliRate }),
