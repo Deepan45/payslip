@@ -4,14 +4,14 @@ import { env } from "./config/env";
 
 async function main() {
   const email = env.seedAdminEmail.trim().toLowerCase();
-  const existing = await prisma.admin.findUnique({ where: { email } });
+  const existing = await prisma.user.findUnique({ where: { email } });
 
   if (existing) {
     console.log(`Admin ${email} already exists — skipping.`);
   } else {
     const passwordHash = await hashPassword(env.seedAdminPassword);
-    await prisma.admin.create({ data: { email, passwordHash } });
-    console.log(`Created admin ${email} with the password from SEED_ADMIN_PASSWORD.`);
+    await prisma.user.create({ data: { email, passwordHash, role: "SUPER_ADMIN" } });
+    console.log(`Created Super Admin ${email} with the password from SEED_ADMIN_PASSWORD.`);
   }
 
   const company = await prisma.companySettings.findFirst();

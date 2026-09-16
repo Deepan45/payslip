@@ -1,6 +1,6 @@
 import { Router } from "express";
 import * as XLSX from "xlsx";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import {
   aggregateEmployeesForPeriod,
   getCompanySettings,
@@ -10,6 +10,7 @@ import {
 } from "../services/statutory.service";
 
 export const statutoryRouter = Router();
+statutoryRouter.use(requireAuth, requirePermission("statutory.view"));
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -24,7 +25,7 @@ function parsePeriod(req: import("express").Request): { periodMonth: number; per
 }
 
 // PF — on-screen summary (totals + skipped members) before downloading the ECR file.
-statutoryRouter.get("/pf/summary", requireAuth, async (req, res) => {
+statutoryRouter.get("/pf/summary", async (req, res) => {
   const period = parsePeriod(req);
   if (!period) return res.status(400).json({ error: "periodMonth and periodYear query params are required" });
   const [rows, company] = await Promise.all([
@@ -36,7 +37,7 @@ statutoryRouter.get("/pf/summary", requireAuth, async (req, res) => {
 });
 
 // PF — downloads the actual ECR text file to upload on the EPFO portal.
-statutoryRouter.get("/pf/ecr-file", requireAuth, async (req, res) => {
+statutoryRouter.get("/pf/ecr-file", async (req, res) => {
   const period = parsePeriod(req);
   if (!period) return res.status(400).json({ error: "periodMonth and periodYear query params are required" });
   const [rows, company] = await Promise.all([
@@ -51,7 +52,7 @@ statutoryRouter.get("/pf/ecr-file", requireAuth, async (req, res) => {
 });
 
 // ESI — on-screen summary before downloading the contribution file.
-statutoryRouter.get("/esi/summary", requireAuth, async (req, res) => {
+statutoryRouter.get("/esi/summary", async (req, res) => {
   const period = parsePeriod(req);
   if (!period) return res.status(400).json({ error: "periodMonth and periodYear query params are required" });
   const [rows, company] = await Promise.all([
@@ -63,7 +64,7 @@ statutoryRouter.get("/esi/summary", requireAuth, async (req, res) => {
 });
 
 // ESI — downloads the contribution CSV to upload on the ESIC portal.
-statutoryRouter.get("/esi/file", requireAuth, async (req, res) => {
+statutoryRouter.get("/esi/file", async (req, res) => {
   const period = parsePeriod(req);
   if (!period) return res.status(400).json({ error: "periodMonth and periodYear query params are required" });
   const [rows, company] = await Promise.all([
@@ -81,7 +82,7 @@ statutoryRouter.get("/esi/file", requireAuth, async (req, res) => {
 // half-yearly, not every month — this computes the slab-based amount for
 // whichever single period is selected; only run it for a month your
 // establishment's LWF cycle is actually due for.
-statutoryRouter.get("/lwf/summary", requireAuth, async (req, res) => {
+statutoryRouter.get("/lwf/summary", async (req, res) => {
   const period = parsePeriod(req);
   if (!period) return res.status(400).json({ error: "periodMonth and periodYear query params are required" });
   const [rows, company] = await Promise.all([
@@ -93,7 +94,7 @@ statutoryRouter.get("/lwf/summary", requireAuth, async (req, res) => {
 });
 
 // LWF — downloads an Excel challan listing every employee's slab-based contribution.
-statutoryRouter.get("/lwf/challan-file", requireAuth, async (req, res) => {
+statutoryRouter.get("/lwf/challan-file", async (req, res) => {
   const period = parsePeriod(req);
   if (!period) return res.status(400).json({ error: "periodMonth and periodYear query params are required" });
   const [rows, company] = await Promise.all([

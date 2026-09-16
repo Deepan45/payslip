@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import { uploadSalarySheet, downloadSalarySheetTemplate, analyzeSalarySheet } from "../controllers/upload.controller";
 
 const upload = multer({
@@ -18,7 +18,8 @@ const upload = multer({
 });
 
 export const uploadRouter = Router();
+uploadRouter.use(requireAuth, requirePermission("upload.run"));
 
-uploadRouter.get("/template", requireAuth, downloadSalarySheetTemplate);
-uploadRouter.post("/analyze", requireAuth, upload.single("file"), analyzeSalarySheet);
-uploadRouter.post("/", requireAuth, upload.single("file"), uploadSalarySheet);
+uploadRouter.get("/template", downloadSalarySheetTemplate);
+uploadRouter.post("/analyze", upload.single("file"), analyzeSalarySheet);
+uploadRouter.post("/", upload.single("file"), uploadSalarySheet);

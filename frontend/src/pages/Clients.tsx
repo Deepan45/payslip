@@ -6,6 +6,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Avatar } from "../components/Avatar";
 import { EmptyState } from "../components/EmptyState";
 import { PageLoader } from "../components/PageLoader";
+import { useAuth } from "../context/AuthContext";
 
 interface ClientRow {
   id: string;
@@ -94,6 +95,8 @@ function ClientFields({ values, onChange }: { values: ClientFormValues; onChange
 }
 
 export function Clients() {
+  const { can } = useAuth();
+  const canManage = can("clients.manage");
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -245,20 +248,22 @@ export function Clients() {
             <h2 style={{ margin: 0 }}>All Clients</h2>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {selected.size > 0 && (
+            {canManage && selected.size > 0 && (
               <ActionButton icon="delete" tone="danger" disabled={bulkDeleting} onClick={() => setConfirmBulk(true)}>
                 {bulkDeleting ? "Deleting..." : `Delete ${selected.size} Selected`}
               </ActionButton>
             )}
-            <button className="btn-primary" onClick={() => setShowForm((s) => !s)}>
-              {showForm ? "Cancel" : "+ Add Client"}
-            </button>
+            {canManage && (
+              <button className="btn-primary" onClick={() => setShowForm((s) => !s)}>
+                {showForm ? "Cancel" : "+ Add Client"}
+              </button>
+            )}
           </div>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
 
-        {showForm && (
+        {canManage && showForm && (
           <form onSubmit={handleCreate} style={{ marginBottom: 20, maxWidth: 480 }}>
             <ClientFields values={createValues} onChange={setCreateValues} />
             <button type="submit" className="btn-primary" disabled={saving}>
@@ -276,9 +281,11 @@ export function Clients() {
             <table>
               <thead>
                 <tr>
-                  <th style={{ width: 32 }}>
-                    <input type="checkbox" checked={clients.length > 0 && selected.size === clients.length} onChange={(e) => toggleAll(e.target.checked)} />
-                  </th>
+                  {canManage && (
+                    <th style={{ width: 32 }}>
+                      <input type="checkbox" checked={clients.length > 0 && selected.size === clients.length} onChange={(e) => toggleAll(e.target.checked)} />
+                    </th>
+                  )}
                   <th>Name</th>
                   <th>Contact</th>
                   <th className="num">Employees</th>
@@ -291,9 +298,11 @@ export function Clients() {
               <tbody>
                 {clients.map((c) => (
                   <tr key={c.id}>
-                    <td>
-                      <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleOne(c.id)} />
-                    </td>
+                    {canManage && (
+                      <td>
+                        <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleOne(c.id)} />
+                      </td>
+                    )}
                     <td>
                       <div className="name-cell">
                         <Avatar name={c.name} size={28} />
@@ -314,18 +323,24 @@ export function Clients() {
                       )}
                     </td>
                     <td className="actions">
-                      <Link to={`/upload?clientId=${c.id}`} className="btn-action">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 16V4M12 4l-4 4M12 4l4 4M4 20h16" />
-                        </svg>
-                        Upload
-                      </Link>
-                      <ActionButton icon="edit" onClick={() => startEdit(c)}>
-                        Edit
-                      </ActionButton>
-                      <ActionButton icon="delete" tone="danger" disabled={deletingId === c.id} onClick={() => setConfirmTarget(c)}>
-                        {deletingId === c.id ? "Deleting..." : "Delete"}
-                      </ActionButton>
+                      {can("upload.run") && (
+                        <Link to={`/upload?clientId=${c.id}`} className="btn-action">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 16V4M12 4l-4 4M12 4l4 4M4 20h16" />
+                          </svg>
+                          Upload
+                        </Link>
+                      )}
+                      {canManage && (
+                        <>
+                          <ActionButton icon="edit" onClick={() => startEdit(c)}>
+                            Edit
+                          </ActionButton>
+                          <ActionButton icon="delete" tone="danger" disabled={deletingId === c.id} onClick={() => setConfirmTarget(c)}>
+                            {deletingId === c.id ? "Deleting..." : "Delete"}
+                          </ActionButton>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}

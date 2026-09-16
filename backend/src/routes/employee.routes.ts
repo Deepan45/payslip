@@ -1,12 +1,12 @@
 import { Router } from "express";
 import crypto from "crypto";
 import { prisma } from "../config/db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import { hashPassword } from "../utils/password";
 
 export const employeeRouter = Router();
 
-employeeRouter.get("/", requireAuth, async (req, res) => {
+employeeRouter.get("/", requireAuth, requirePermission("employees.view"), async (req, res) => {
   const clientId = typeof req.query.clientId === "string" ? req.query.clientId : undefined;
   const employees = await prisma.employee.findMany({
     where: clientId ? { currentClientId: clientId } : undefined,
@@ -16,7 +16,7 @@ employeeRouter.get("/", requireAuth, async (req, res) => {
   res.json({ employees });
 });
 
-employeeRouter.get("/:id", requireAuth, async (req, res) => {
+employeeRouter.get("/:id", requireAuth, requirePermission("employees.view"), async (req, res) => {
   const employee = await prisma.employee.findUnique({
     where: { id: req.params.id },
     include: {
@@ -32,7 +32,7 @@ employeeRouter.get("/:id", requireAuth, async (req, res) => {
   res.json({ employee: { ...safe, portalAccessEnabled: Boolean(portalPasswordHash) } });
 });
 
-employeeRouter.put("/:id", requireAuth, async (req, res) => {
+employeeRouter.put("/:id", requireAuth, requirePermission("employees.manage"), async (req, res) => {
   const { email, phone } = req.body as { email?: string; phone?: string };
   try {
     const employee = await prisma.employee.update({ where: { id: req.params.id }, data: { email, phone } });
@@ -69,7 +69,7 @@ async function tryDeleteEmployee(id: string): Promise<{ ok: true } | { ok: false
   return { ok: true };
 }
 
-employeeRouter.delete("/:id", requireAuth, async (req, res) => {
+employeeRouter.delete("/:id", requireAuth, requirePermission("employees.manage"), async (req, res) => {
   const result = await tryDeleteEmployee(req.params.id);
   if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.json({ ok: true });
@@ -77,7 +77,7 @@ employeeRouter.delete("/:id", requireAuth, async (req, res) => {
 
 // Bulk delete: attempts every id independently and reports per-id outcome
 // rather than failing the whole batch on the first blocked one.
-employeeRouter.post("/delete", requireAuth, async (req, res) => {
+employeeRouter.post("/delete", requireAuth, requirePermission("employees.manage"), async (req, res) => {
   const { ids } = req.body as { ids?: string[] };
   if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids must be a non-empty array" });
 
@@ -95,7 +95,7 @@ employeeRouter.post("/delete", requireAuth, async (req, res) => {
 // Enables (or resets) self-service portal access for one employee, returning
 // a freshly generated temporary password ONCE — it is not recoverable after
 // this response, only reset-able.
-employeeRouter.post("/:id/portal-access", requireAuth, async (req, res) => {
+employeeRouter.post("/:id/portal-access", requireAuth, requirePermission("employees.portal_access"), async (req, res) => {
   const employee = await prisma.employee.findUnique({ where: { id: req.params.id } });
   if (!employee) return res.status(404).json({ error: "Employee not found" });
 

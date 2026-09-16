@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { api, apiErrorMessage } from "../api/client";
@@ -8,6 +8,7 @@ import { AnalyzeResponse, CanonicalField, ColumnMapping } from "../types/mapping
 import { Link } from "react-router-dom";
 import { EmptyState } from "../components/EmptyState";
 import { BrandLoader } from "../components/BrandLoader";
+import { FileDropzone } from "../components/FileDropzone";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -55,10 +56,10 @@ export function Upload() {
   const [existingSheets, setExistingSheets] = useState<ExistingSheet[]>([]);
   const [existingLoading, setExistingLoading] = useState(false);
   const [filePreview, setFilePreview] = useState<unknown[][] | null>(null);
+  const [fileRowCount, setFileRowCount] = useState<number | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [forceRemap, setForceRemap] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api.get("/clients").then((res) => setClients(res.data.clients));
@@ -79,6 +80,7 @@ export function Upload() {
   async function handleFileChange(f: File | null) {
     setFile(f);
     setFilePreview(null);
+    setFileRowCount(null);
     setPreviewError(null);
     if (!f) return;
     try {
@@ -87,6 +89,7 @@ export function Upload() {
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true }) as unknown[][];
       setFilePreview(rows.slice(0, 10));
+      setFileRowCount(rows.length);
       setShowPreviewModal(true);
     } catch {
       setPreviewError("Could not read this file for preview — it may still upload fine, this is just a quick look.");
@@ -96,8 +99,9 @@ export function Upload() {
   function cancelFileChoice() {
     setFile(null);
     setFilePreview(null);
+    setFileRowCount(null);
+    setPreviewError(null);
     setShowPreviewModal(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   function confirmFileChoice() {
@@ -215,26 +219,26 @@ export function Upload() {
               </label>
             )}
 
-            <label>
-              Excel file (.xlsx / .xls)
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
-                required
-              />
-            </label>
+            <label>Excel file (.xlsx / .xls)</label>
+            <FileDropzone
+              accept={[".xlsx", ".xls"]}
+              maxSizeBytes={10 * 1024 * 1024}
+              file={file}
+              onFileSelected={handleFileChange}
+              onRemove={cancelFileChoice}
+              label="Drag & drop your salary sheet"
+              extra={fileRowCount != null ? `${fileRowCount} rows` : undefined}
+              actions={
+                file && !previewError ? (
+                  <button type="button" className="btn-action" onClick={() => setShowPreviewModal(true)}>
+                    Preview
+                  </button>
+                ) : undefined
+              }
+            />
+            <div style={{ marginBottom: 16 }} />
 
             {previewError && <p className="alert alert-warning small">{previewError}</p>}
-            {file && !showPreviewModal && (
-              <p className="small" style={{ marginTop: -10, marginBottom: 16 }}>
-                <span className="badge badge-success">File selected</span>{" "}
-                <button type="button" className="btn-link" onClick={() => setShowPreviewModal(true)} style={{ margin: 0 }}>
-                  {file.name} — view preview
-                </button>
-              </p>
-            )}
 
             <div className="form-row">
               <label>

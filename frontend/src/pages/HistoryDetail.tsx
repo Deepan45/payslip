@@ -7,6 +7,7 @@ import { PayslipPreviewModal } from "../components/PayslipPreviewModal";
 import { ActionButton } from "../components/ActionButton";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageLoader } from "../components/PageLoader";
+import { useAuth } from "../context/AuthContext";
 
 const PAGE_SIZE = 25;
 
@@ -50,6 +51,8 @@ interface SheetDetail {
 }
 
 export function HistoryDetail() {
+  const { can } = useAuth();
+  const canDelete = can("history.delete");
   const { sheetId } = useParams();
   const navigate = useNavigate();
   const [sheet, setSheet] = useState<SheetDetail | null>(null);
@@ -248,24 +251,28 @@ export function HistoryDetail() {
             >
               {sourceDownloading ? "Downloading..." : "Download Original Sheet"}
             </ActionButton>
-            {selected.size > 0 && (
+            {canDelete && selected.size > 0 && (
               <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={() => setConfirmBulkRecords(true)}>
                 {deleting ? "Deleting..." : `Delete ${selected.size} Selected`}
               </ActionButton>
             )}
           </div>
-          <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={() => setConfirmSheet(true)}>
-            Delete This Sheet
-          </ActionButton>
+          {canDelete && (
+            <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={() => setConfirmSheet(true)}>
+              Delete This Sheet
+            </ActionButton>
+          )}
         </div>
 
         <div className="table-container">
           <table>
             <thead>
               <tr>
-                <th style={{ width: 32 }}>
-                  <input type="checkbox" checked={allOnPageSelected} onChange={(e) => toggleAllOnPage(pageRows, e.target.checked)} />
-                </th>
+                {canDelete && (
+                  <th style={{ width: 32 }}>
+                    <input type="checkbox" checked={allOnPageSelected} onChange={(e) => toggleAllOnPage(pageRows, e.target.checked)} />
+                  </th>
+                )}
                 <th>Employee ID</th>
                 <th>Name</th>
                 <th>Department</th>
@@ -276,9 +283,11 @@ export function HistoryDetail() {
             <tbody>
               {pageRows.map((r) => (
                 <tr key={r.id}>
-                  <td>
-                    <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleOne(r.id)} />
-                  </td>
+                  {canDelete && (
+                    <td>
+                      <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleOne(r.id)} />
+                    </td>
+                  )}
                   <td>{r.employee.employeeCode}</td>
                   <td style={{ fontWeight: 600 }}>{r.employee.name}</td>
                   <td>{r.employee.department ?? "-"}</td>
@@ -299,9 +308,11 @@ export function HistoryDetail() {
                     ) : (
                       <span className="muted small">Not generated</span>
                     )}
-                    <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={() => setConfirmRecordId(r.id)}>
-                      Delete
-                    </ActionButton>
+                    {canDelete && (
+                      <ActionButton icon="delete" tone="danger" disabled={deleting} onClick={() => setConfirmRecordId(r.id)}>
+                        Delete
+                      </ActionButton>
+                    )}
                   </td>
                 </tr>
               ))}

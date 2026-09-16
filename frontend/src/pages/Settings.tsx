@@ -1,5 +1,8 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
+import { FileDropzone } from "../components/FileDropzone";
+import { EmptyState } from "../components/EmptyState";
+import { useAuth } from "../context/AuthContext";
 
 interface Company {
   id: string;
@@ -34,6 +37,8 @@ interface Company {
 }
 
 export function Settings() {
+  const { can } = useAuth();
+  const canManage = can("settings.manage");
   const [company, setCompany] = useState<Company | null>(null);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
@@ -42,6 +47,12 @@ export function Settings() {
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
   const [logo, setLogo] = useState<File | null>(null);
+  const logoPreviewUrl = useMemo(() => (logo ? URL.createObjectURL(logo) : null), [logo]);
+  useEffect(() => {
+    return () => {
+      if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+    };
+  }, [logoPreviewUrl]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +155,17 @@ export function Settings() {
     }
   }
 
+  if (!canManage) {
+    return (
+      <div>
+        <h1>Company Settings</h1>
+        <div className="card">
+          <EmptyState title="You don't have access to this page" hint="Company settings can only be changed by a Super Admin." />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <h1>Company Settings</h1>
@@ -195,12 +217,19 @@ export function Settings() {
             </label>
           </div>
 
-          <label>
-            Logo (PNG/JPG)
-            <input type="file" accept="image/png,image/jpeg" onChange={(e) => setLogo(e.target.files?.[0] ?? null)} />
-          </label>
-          {company?.logoPath && (
-            <p className="small" style={{ marginTop: -8 }}>
+          <label>Logo (PNG/JPG)</label>
+          <FileDropzone
+            accept={[".png", ".jpg", ".jpeg"]}
+            acceptAttr="image/png,image/jpeg"
+            maxSizeBytes={2 * 1024 * 1024}
+            file={logo}
+            onFileSelected={setLogo}
+            onRemove={() => setLogo(null)}
+            label="Drag & drop a logo"
+            thumbnail={logoPreviewUrl ? <img src={logoPreviewUrl} alt="Logo preview" /> : undefined}
+          />
+          {company?.logoPath && !logo && (
+            <p className="small" style={{ marginTop: 10, marginBottom: 0 }}>
               <span className="badge badge-success">Logo set</span>
             </p>
           )}

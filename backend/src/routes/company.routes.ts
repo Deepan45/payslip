@@ -3,7 +3,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { prisma } from "../config/db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 
 const LOGO_DIR = path.join(__dirname, "..", "..", "storage", "logo");
 fs.mkdirSync(LOGO_DIR, { recursive: true });
@@ -23,7 +23,7 @@ companyRouter.get("/", requireAuth, async (_req, res) => {
   res.json({ company });
 });
 
-companyRouter.put("/", requireAuth, async (req, res) => {
+companyRouter.put("/", requireAuth, requirePermission("settings.manage"), async (req, res) => {
   const {
     name, address, mobile, officePhone, email, website,
     pfEstablishmentId, esicEmployerCode, lwfRegistrationNo,
@@ -88,7 +88,7 @@ companyRouter.put("/", requireAuth, async (req, res) => {
   res.json({ company });
 });
 
-companyRouter.post("/logo", requireAuth, upload.single("logo"), async (req, res) => {
+companyRouter.post("/logo", requireAuth, requirePermission("settings.manage"), upload.single("logo"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No logo file uploaded" });
 
   // Store just the filename, not the full disk path — the full path (as

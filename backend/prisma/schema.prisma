@@ -15,11 +15,33 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Admin {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
+enum UserRole {
+  SUPER_ADMIN
+  PAYROLL_MANAGER
+  ACCOUNTANT
+  VIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+/// An admin-side login. Table name stays "Admin" (see @@map) so the existing
+/// seeded row and its id carry over untouched when this model gained roles.
+model User {
+  id                 String     @id @default(cuid())
+  email              String     @unique
+  passwordHash       String
+  name               String?
+  role               UserRole   @default(SUPER_ADMIN)
+  status             UserStatus @default(ACTIVE)
+  mustChangePassword Boolean    @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@map("Admin")
 }
 
 model CompanySettings {

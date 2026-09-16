@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { prisma } from "../config/db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 
 export const clientRouter = Router();
 
-clientRouter.get("/", requireAuth, async (_req, res) => {
+clientRouter.get("/", requireAuth, requirePermission("clients.view"), async (_req, res) => {
   const clients = await prisma.client.findMany({
     orderBy: { name: "asc" },
     include: {
@@ -15,7 +15,7 @@ clientRouter.get("/", requireAuth, async (_req, res) => {
   res.json({ clients });
 });
 
-clientRouter.post("/", requireAuth, async (req, res) => {
+clientRouter.post("/", requireAuth, requirePermission("clients.manage"), async (req, res) => {
   const { name, address, contactPerson, contactPhone, contactEmail, billingRate } = req.body as {
     name?: string;
     address?: string;
@@ -35,7 +35,7 @@ clientRouter.post("/", requireAuth, async (req, res) => {
   res.status(201).json({ client });
 });
 
-clientRouter.get("/:id", requireAuth, async (req, res) => {
+clientRouter.get("/:id", requireAuth, requirePermission("clients.view"), async (req, res) => {
   const client = await prisma.client.findUnique({
     where: { id: req.params.id },
     include: { columnProfile: true, _count: { select: { employees: true, salarySheets: true } } },
@@ -44,7 +44,7 @@ clientRouter.get("/:id", requireAuth, async (req, res) => {
   res.json({ client });
 });
 
-clientRouter.put("/:id", requireAuth, async (req, res) => {
+clientRouter.put("/:id", requireAuth, requirePermission("clients.manage"), async (req, res) => {
   const { name, address, contactPerson, contactPhone, contactEmail, billingRate } = req.body as {
     name?: string;
     address?: string;
@@ -97,7 +97,7 @@ async function tryDeleteClient(id: string): Promise<{ ok: true } | { ok: false; 
   return { ok: true };
 }
 
-clientRouter.delete("/:id", requireAuth, async (req, res) => {
+clientRouter.delete("/:id", requireAuth, requirePermission("clients.manage"), async (req, res) => {
   const result = await tryDeleteClient(req.params.id);
   if (!result.ok) return res.status(result.status).json({ error: result.error });
   res.json({ ok: true });
@@ -106,7 +106,7 @@ clientRouter.delete("/:id", requireAuth, async (req, res) => {
 // Bulk delete: attempts every id independently (one client's dependents
 // don't block another's deletion) and reports per-id outcome rather than
 // failing the whole batch on the first blocked one.
-clientRouter.post("/delete", requireAuth, async (req, res) => {
+clientRouter.post("/delete", requireAuth, requirePermission("clients.manage"), async (req, res) => {
   const { ids } = req.body as { ids?: string[] };
   if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "ids must be a non-empty array" });
 

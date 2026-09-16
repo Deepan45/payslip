@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { prisma } from "../config/db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 
 export const dashboardRouter = Router();
 
-dashboardRouter.get("/summary", requireAuth, async (_req, res) => {
+dashboardRouter.get("/summary", requireAuth, requirePermission("dashboard.view"), async (_req, res) => {
   const [totalEmployees, totalClients, totalSheets, latestSheet] = await Promise.all([
     prisma.employee.count(),
     prisma.client.count(),

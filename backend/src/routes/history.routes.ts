@@ -2,9 +2,10 @@ import { Router } from "express";
 import fs from "fs";
 import path from "path";
 import { prisma } from "../config/db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 
 export const historyRouter = Router();
+historyRouter.use(requireAuth, requirePermission("history.view"));
 
 const PAYSLIP_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "payslips");
 const SALARY_SHEET_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "salary-sheets");
@@ -39,7 +40,7 @@ async function deleteSalaryRecordsCascade(recordIds: string[]): Promise<void> {
 
 // List all previously uploaded salary sheets (most recent first). Optional
 // clientId / periodYear / periodMonth filters, for the Payslips browse page.
-historyRouter.get("/", requireAuth, async (req, res) => {
+historyRouter.get("/", async (req, res) => {
   const clientId = typeof req.query.clientId === "string" ? req.query.clientId : undefined;
   const periodYear = req.query.periodYear ? parseInt(String(req.query.periodYear), 10) : undefined;
   const periodMonth = req.query.periodMonth ? parseInt(String(req.query.periodMonth), 10) : undefined;
@@ -57,14 +58,14 @@ historyRouter.get("/", requireAuth, async (req, res) => {
 });
 
 // Distinct years that have at least one uploaded sheet, for the Payslips filter.
-historyRouter.get("/meta/years", requireAuth, async (_req, res) => {
+historyRouter.get("/meta/years", async (_req, res) => {
   const sheets = await prisma.salarySheet.findMany({ select: { periodYear: true }, distinct: ["periodYear"] });
   const years = sheets.map((s) => s.periodYear).sort((a, b) => b - a);
   res.json({ years });
 });
 
 // Detail for one sheet: every employee's salary record + generated payslip for that period.
-historyRouter.get("/:sheetId", requireAuth, async (req, res) => {
+historyRouter.get("/:sheetId", async (req, res) => {
   const sheet = await prisma.salarySheet.findUnique({
     where: { id: req.params.sheetId },
     include: {
@@ -99,7 +100,7 @@ historyRouter.get("/:sheetId", requireAuth, async (req, res) => {
 
 // Re-downloads the originally uploaded workbook for this sheet, exactly as uploaded — not the
 // generated payslips. Only available for sheets uploaded after this feature existed (filePath set).
-historyRouter.get("/:sheetId/download", requireAuth, async (req, res) => {
+historyRouter.get("/:sheetId/download", async (req, res) => {
   const sheet = await prisma.salarySheet.findUnique({
     where: { id: req.params.sheetId },
     select: { id: true, fileName: true, filePath: true },
@@ -122,7 +123,7 @@ const MONTH_NAMES = [
 
 // Downloads the client bill PDF generated automatically when this sheet was uploaded. 404s for
 // sheets uploaded before this feature existed, or if bill generation failed at upload time.
-historyRouter.get("/:sheetId/bill/download", requireAuth, async (req, res) => {
+historyRouter.get("/:sheetId/bill/download", async (req, res) => {
   const sheet = await prisma.salarySheet.findUnique({
     where: { id: req.params.sheetId },
     select: {
@@ -145,7 +146,7 @@ historyRouter.get("/:sheetId/bill/download", requireAuth, async (req, res) => {
 
 // Bulk-delete specific payslips (salary records) within one sheet — the
 // underlying employees and the sheet itself are untouched, only these rows.
-historyRouter.post("/:sheetId/records/delete", requireAuth, async (req, res) => {
+historyRouter.post("/:sheetId/records/delete", requirePermission("history.delete"), async (req, res) => {
   const { recordIds } = req.body as { recordIds?: string[] };
   if (!Array.isArray(recordIds) || recordIds.length === 0) {
     return res.status(400).json({ error: "recordIds must be a non-empty array" });
@@ -189,7 +190,7 @@ async function deleteSheet(sheetId: string): Promise<{ ok: true } | { ok: false 
   return { ok: true };
 }
 
-historyRouter.delete("/:sheetId", requireAuth, async (req, res) => {
+historyRouter.delete("/:sheetId", requirePermission("history.delete"), async (req, res) => {
   const result = await deleteSheet(req.params.sheetId);
   if (!result.ok) return res.status(404).json({ error: "Sheet not found" });
   res.json({ ok: true });
@@ -198,7 +199,7 @@ historyRouter.delete("/:sheetId", requireAuth, async (req, res) => {
 // Bulk delete: removes every given sheet (each has no dependents to be
 // "blocked" by — a sheet is a self-contained upload batch), and reports
 // which ids didn't correspond to a real sheet.
-historyRouter.post("/delete", requireAuth, async (req, res) => {
+historyRouter.post("/delete", requirePermission("history.delete"), async (req, res) => {
   const { sheetIds } = req.body as { sheetIds?: string[] };
   if (!Array.isArray(sheetIds) || sheetIds.length === 0) {
     return res.status(400).json({ error: "sheetIds must be a non-empty array" });

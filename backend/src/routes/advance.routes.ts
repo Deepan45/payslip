@@ -1,12 +1,13 @@
 import { Router } from "express";
 import * as XLSX from "xlsx";
 import { prisma } from "../config/db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 
 export const advanceRouter = Router();
+advanceRouter.use(requireAuth, requirePermission("advances.view"));
 
 // Excel export of the current ledger summary (one row per employee with any advance activity).
-advanceRouter.get("/export", requireAuth, async (_req, res) => {
+advanceRouter.get("/export", async (_req, res) => {
   const entries = await prisma.advanceEntry.findMany({
     include: { employee: { select: { employeeCode: true, name: true } } },
     orderBy: { date: "desc" },
@@ -40,7 +41,7 @@ advanceRouter.get("/export", requireAuth, async (_req, res) => {
 });
 
 // List every employee who has at least one advance entry, with their running balance.
-advanceRouter.get("/", requireAuth, async (_req, res) => {
+advanceRouter.get("/", async (_req, res) => {
   const entries = await prisma.advanceEntry.findMany({
     include: { employee: { select: { id: true, employeeCode: true, name: true } } },
     orderBy: { date: "desc" },
@@ -74,7 +75,7 @@ advanceRouter.get("/", requireAuth, async (_req, res) => {
 });
 
 // Full ledger + balance for one employee.
-advanceRouter.get("/:employeeId", requireAuth, async (req, res) => {
+advanceRouter.get("/:employeeId", async (req, res) => {
   const employee = await prisma.employee.findUnique({ where: { id: req.params.employeeId } });
   if (!employee) return res.status(404).json({ error: "Employee not found" });
 
@@ -90,7 +91,7 @@ advanceRouter.get("/:employeeId", requireAuth, async (req, res) => {
 
 // Edit a manually-issued advance entry. Entries auto-created from a payslip
 // deduction (salaryRecordId set) are a payroll record, not editable here.
-advanceRouter.put("/entries/:entryId", requireAuth, async (req, res) => {
+advanceRouter.put("/entries/:entryId", requirePermission("advances.manage"), async (req, res) => {
   const existing = await prisma.advanceEntry.findUnique({ where: { id: req.params.entryId } });
   if (!existing) return res.status(404).json({ error: "Entry not found" });
   if (existing.salaryRecordId) {
@@ -112,7 +113,7 @@ advanceRouter.put("/entries/:entryId", requireAuth, async (req, res) => {
 });
 
 // Delete a manually-issued advance entry (same restriction as edit above).
-advanceRouter.delete("/entries/:entryId", requireAuth, async (req, res) => {
+advanceRouter.delete("/entries/:entryId", requirePermission("advances.manage"), async (req, res) => {
   const existing = await prisma.advanceEntry.findUnique({ where: { id: req.params.entryId } });
   if (!existing) return res.status(404).json({ error: "Entry not found" });
   if (existing.salaryRecordId) {
@@ -123,7 +124,7 @@ advanceRouter.delete("/entries/:entryId", requireAuth, async (req, res) => {
 });
 
 // Manually issue an advance (cash given outside payroll).
-advanceRouter.post("/", requireAuth, async (req, res) => {
+advanceRouter.post("/", requirePermission("advances.manage"), async (req, res) => {
   const { employeeId, amount, date, note } = req.body as {
     employeeId?: string;
     amount?: number;

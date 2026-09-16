@@ -7,6 +7,7 @@ import { Pagination } from "../components/Pagination";
 import { Avatar } from "../components/Avatar";
 import { EmptyState } from "../components/EmptyState";
 import { PageLoader } from "../components/PageLoader";
+import { useAuth } from "../context/AuthContext";
 
 const PAGE_SIZE = 25;
 
@@ -20,6 +21,8 @@ interface Employee {
 }
 
 export function Employees() {
+  const { can } = useAuth();
+  const canManage = can("employees.manage");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -132,7 +135,7 @@ export function Employees() {
             style={{ maxWidth: 360, margin: 0 }}
           />
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {selected.size > 0 && (
+            {canManage && selected.size > 0 && (
               <ActionButton icon="delete" tone="danger" disabled={bulkDeleting} onClick={() => setConfirmBulk(true)}>
                 {bulkDeleting ? "Deleting..." : `Delete ${selected.size} Selected`}
               </ActionButton>
@@ -153,9 +156,11 @@ export function Employees() {
               <table>
                 <thead>
                   <tr>
-                    <th style={{ width: 32 }}>
-                      <input type="checkbox" checked={allOnPageSelected} onChange={(ev) => toggleAllOnPage(pageRows, ev.target.checked)} />
-                    </th>
+                    {canManage && (
+                      <th style={{ width: 32 }}>
+                        <input type="checkbox" checked={allOnPageSelected} onChange={(ev) => toggleAllOnPage(pageRows, ev.target.checked)} />
+                      </th>
+                    )}
                     <th>Employee ID</th>
                     <th>Name</th>
                     <th>Designation</th>
@@ -167,9 +172,11 @@ export function Employees() {
                 <tbody>
                   {pageRows.map((e) => (
                     <tr key={e.id}>
-                      <td>
-                        <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggleOne(e.id)} />
-                      </td>
+                      {canManage && (
+                        <td>
+                          <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggleOne(e.id)} />
+                        </td>
+                      )}
                       <td>{e.employeeCode}</td>
                       <td>
                         <div className="name-cell">
@@ -187,9 +194,11 @@ export function Employees() {
                           </svg>
                           View history
                         </Link>
-                        <ActionButton icon="delete" tone="danger" disabled={deletingId === e.id} onClick={() => setConfirmTarget(e)}>
-                          {deletingId === e.id ? "Deleting..." : "Delete"}
-                        </ActionButton>
+                        {canManage && (
+                          <ActionButton icon="delete" tone="danger" disabled={deletingId === e.id} onClick={() => setConfirmTarget(e)}>
+                            {deletingId === e.id ? "Deleting..." : "Delete"}
+                          </ActionButton>
+                        )}
                       </td>
                     </tr>
                   ))}

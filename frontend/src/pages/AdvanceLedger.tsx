@@ -5,6 +5,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ActionButton } from "../components/ActionButton";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { PageLoader } from "../components/PageLoader";
+import { useAuth } from "../context/AuthContext";
 
 const PAGE_SIZE = 20;
 
@@ -42,6 +43,8 @@ async function downloadLedgerExcel() {
 }
 
 export function AdvanceLedger() {
+  const { can } = useAuth();
+  const canManage = can("advances.manage");
   const [summary, setSummary] = useState<Summary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Summary | null>(null);
@@ -215,12 +218,14 @@ export function AdvanceLedger() {
                   Current balance:{" "}
                   <strong style={{ color: balance > 0 ? "var(--color-error)" : "var(--color-success-text)" }}>{formatMoney(balance)}</strong>
                 </p>
-                <button className="btn-primary" onClick={() => setShowIssueForm((s) => !s)}>
-                  {showIssueForm ? "Cancel" : "+ Issue Advance"}
-                </button>
+                {canManage && (
+                  <button className="btn-primary" onClick={() => setShowIssueForm((s) => !s)}>
+                    {showIssueForm ? "Cancel" : "+ Issue Advance"}
+                  </button>
+                )}
               </div>
 
-              {showIssueForm && (
+              {canManage && showIssueForm && (
                 <form onSubmit={handleIssue} style={{ marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid var(--color-border)" }}>
                   <div className="form-row">
                     <label>
@@ -296,7 +301,9 @@ export function AdvanceLedger() {
                               <td className="num">{formatMoney(e.amount)}</td>
                               <td className="muted small">{e.note ?? "-"}</td>
                               <td className="actions">
-                                {editable ? (
+                                {!editable ? (
+                                  <span className="muted small">From payslip</span>
+                                ) : canManage ? (
                                   <>
                                     <ActionButton icon="edit" onClick={() => startEdit(e)}>
                                       Edit
@@ -305,9 +312,7 @@ export function AdvanceLedger() {
                                       Delete
                                     </ActionButton>
                                   </>
-                                ) : (
-                                  <span className="muted small">From payslip</span>
-                                )}
+                                ) : null}
                               </td>
                             </>
                           )}

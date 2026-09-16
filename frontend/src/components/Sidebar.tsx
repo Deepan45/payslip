@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import logo from "../assets/logo-icon.jpeg";
+import { useAuth } from "../context/AuthContext";
 
 type IconProps = { className?: string };
 const icon = (path: string) =>
@@ -22,6 +23,8 @@ const Icons = {
   reports: icon("M3 3v18h18M8 17V10M13 17V6M18 17v-4"),
   statutory: icon("M9 12h6M9 16h6M9 8h1M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6"),
   settings: icon("M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"),
+  users: icon("M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"),
+  account: icon("M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"),
 };
 
 interface NavItem {
@@ -30,32 +33,38 @@ interface NavItem {
   icon: keyof typeof Icons;
   badge: string;
   end?: boolean;
+  /** Hidden if the current user lacks this permission. Omit for always-visible items. */
+  permission?: string;
 }
 
-const TOP_ITEM: NavItem = { to: "/", label: "Dashboard", icon: "dashboard", badge: "badge-icon-dash", end: true };
+const TOP_ITEM: NavItem = { to: "/", label: "Dashboard", icon: "dashboard", badge: "badge-icon-dash", end: true, permission: "dashboard.view" };
 
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Payroll",
     items: [
-      { to: "/upload", label: "Upload", icon: "upload", badge: "badge-icon-blue" },
-      { to: "/clients", label: "Clients", icon: "clients", badge: "badge-icon-aqua" },
-      { to: "/employees", label: "Employees", icon: "employees", badge: "badge-icon-violet" },
-      { to: "/history", label: "History", icon: "history", badge: "badge-icon-amber" },
-      { to: "/payslips", label: "Payslips", icon: "payslips", badge: "badge-icon-blue" },
+      { to: "/upload", label: "Upload", icon: "upload", badge: "badge-icon-blue", permission: "upload.run" },
+      { to: "/clients", label: "Clients", icon: "clients", badge: "badge-icon-aqua", permission: "clients.view" },
+      { to: "/employees", label: "Employees", icon: "employees", badge: "badge-icon-violet", permission: "employees.view" },
+      { to: "/history", label: "History", icon: "history", badge: "badge-icon-amber", permission: "history.view" },
+      { to: "/payslips", label: "Payslips", icon: "payslips", badge: "badge-icon-blue", permission: "payslips.view" },
     ],
   },
   {
     title: "Finance",
     items: [
-      { to: "/advances", label: "Advances", icon: "advances", badge: "badge-icon-green" },
-      { to: "/reports", label: "Reports", icon: "reports", badge: "badge-icon-pink" },
-      { to: "/statutory", label: "Statutory Filings", icon: "statutory", badge: "badge-icon-aqua" },
+      { to: "/advances", label: "Advances", icon: "advances", badge: "badge-icon-green", permission: "advances.view" },
+      { to: "/reports", label: "Reports", icon: "reports", badge: "badge-icon-pink", permission: "reports.view" },
+      { to: "/statutory", label: "Statutory Filings", icon: "statutory", badge: "badge-icon-aqua", permission: "statutory.view" },
     ],
   },
   {
     title: "Account",
-    items: [{ to: "/settings", label: "Settings", icon: "settings", badge: "badge-icon-gray" }],
+    items: [
+      { to: "/settings", label: "Settings", icon: "settings", badge: "badge-icon-gray", permission: "settings.manage" },
+      { to: "/users", label: "Users", icon: "users", badge: "badge-icon-gray", permission: "users.manage" },
+      { to: "/my-account", label: "My Account", icon: "account", badge: "badge-icon-gray" },
+    ],
   },
 ];
 
@@ -79,6 +88,9 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onNavigate }: SidebarProps) {
+  const { can } = useAuth();
+  const visible = (item: NavItem) => !item.permission || can(item.permission);
+
   return (
     <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
       <div className="sidebar-brand">
@@ -92,16 +104,20 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
       </div>
 
       <nav className="sidebar-nav">
-        <NavRow item={TOP_ITEM} onNavigate={onNavigate} />
+        {visible(TOP_ITEM) && <NavRow item={TOP_ITEM} onNavigate={onNavigate} />}
 
-        {NAV_GROUPS.map((group) => (
-          <div key={group.title} className="sidebar-group">
-            <div className="sidebar-group-title">{group.title}</div>
-            {group.items.map((item) => (
-              <NavRow key={item.to} item={item} onNavigate={onNavigate} />
-            ))}
-          </div>
-        ))}
+        {NAV_GROUPS.map((group) => {
+          const items = group.items.filter(visible);
+          if (items.length === 0) return null;
+          return (
+            <div key={group.title} className="sidebar-group">
+              <div className="sidebar-group-title">{group.title}</div>
+              {items.map((item) => (
+                <NavRow key={item.to} item={item} onNavigate={onNavigate} />
+              ))}
+            </div>
+          );
+        })}
       </nav>
 
       <div className="sidebar-footer">

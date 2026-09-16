@@ -1,5 +1,5 @@
-import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth, UserRole } from "../context/AuthContext";
 
 const TITLES: { prefix: string; label: string }[] = [
   { prefix: "/upload", label: "Upload Salary Sheet" },
@@ -10,16 +10,27 @@ const TITLES: { prefix: string; label: string }[] = [
   { prefix: "/advances", label: "Advance Ledger" },
   { prefix: "/reports", label: "Reports" },
   { prefix: "/settings", label: "Company Settings" },
+  { prefix: "/users", label: "Users" },
+  { prefix: "/my-account", label: "My Account" },
   { prefix: "/", label: "Dashboard" },
 ];
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  SUPER_ADMIN: "Super Admin",
+  PAYROLL_MANAGER: "Payroll Manager",
+  ACCOUNTANT: "Accountant",
+  VIEWER: "Viewer",
+};
 
 function pageTitle(pathname: string): string {
   return TITLES.find((t) => pathname.startsWith(t.prefix))?.label ?? "";
 }
 
-function initials(email?: string): string {
-  if (!email) return "?";
-  return email[0].toUpperCase();
+function initials(name?: string | null, email?: string): string {
+  if (name?.trim()) {
+    return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
+  }
+  return email ? email[0].toUpperCase() : "?";
 }
 
 interface TopBarProps {
@@ -48,8 +59,11 @@ export function TopBar({ onMenuClick }: TopBarProps) {
         <div className="topbar-title">{pageTitle(location.pathname)}</div>
       </div>
       <div className="topbar-user">
-        <span className="topbar-avatar">{initials(admin?.email)}</span>
-        <span className="topbar-email">{admin?.email}</span>
+        <Link to="/my-account" className="topbar-user-link" title="My Account">
+          <span className="topbar-avatar">{initials(admin?.name, admin?.email)}</span>
+          <span className="topbar-email">{admin?.name || admin?.email}</span>
+          {admin?.role && <span className="badge badge-navy topbar-role-badge">{ROLE_LABELS[admin.role]}</span>}
+        </Link>
         <span className="topbar-divider" />
         <button onClick={handleLogout} className="topbar-logout" title="Log out">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

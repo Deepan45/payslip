@@ -7,6 +7,7 @@ import { Avatar } from "../components/Avatar";
 import { EmptyState } from "../components/EmptyState";
 import { ActionButton } from "../components/ActionButton";
 import { PageLoader } from "../components/PageLoader";
+import { useAuth } from "../context/AuthContext";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -39,6 +40,9 @@ interface EmployeeDetail {
 }
 
 export function EmployeeDetail() {
+  const { can } = useAuth();
+  const canManage = can("employees.manage");
+  const canPortalAccess = can("employees.portal_access");
   const { id } = useParams();
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -198,7 +202,7 @@ export function EmployeeDetail() {
             </span>
             <h2 style={{ margin: 0 }}>Contact & Portal Access</h2>
           </div>
-          {!editing && (
+          {!editing && canManage && (
             <ActionButton icon="edit" onClick={() => setEditing(true)}>
               Edit contact info
             </ActionButton>
@@ -245,9 +249,11 @@ export function EmployeeDetail() {
               <span className="badge badge-navy">Not enabled</span>
             )}
           </p>
-          <button className="btn-primary" onClick={handleGrantAccess} disabled={grantingAccess}>
-            {grantingAccess ? "Generating..." : employee.portalAccessEnabled ? "Reset Portal Password" : "Enable Portal Access"}
-          </button>
+          {canPortalAccess && (
+            <button className="btn-primary" onClick={handleGrantAccess} disabled={grantingAccess}>
+              {grantingAccess ? "Generating..." : employee.portalAccessEnabled ? "Reset Portal Password" : "Enable Portal Access"}
+            </button>
+          )}
           {tempPassword && (
             <p className="alert alert-success" style={{ marginTop: 10 }}>
               Temporary password: <strong>{tempPassword}</strong> — share this with the employee now, it won't be

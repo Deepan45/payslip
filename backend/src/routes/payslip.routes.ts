@@ -1,7 +1,7 @@
 import { Router } from "express";
 import fs from "fs";
 import { prisma } from "../config/db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import { streamZip } from "../services/zip.service";
 import {
   isEmailConfigured,
@@ -17,9 +17,10 @@ const MONTH_NAMES = [
 ];
 
 export const payslipRouter = Router();
+payslipRouter.use(requireAuth);
 
 // Download (or print, via browser print dialog on the PDF) a single payslip.
-payslipRouter.get("/:payslipId/download", requireAuth, async (req, res) => {
+payslipRouter.get("/:payslipId/download", requirePermission("payslips.view"), async (req, res) => {
   const payslip = await prisma.payslip.findUnique({
     where: { id: req.params.payslipId },
     include: { salaryRecord: { include: { employee: true, sheet: true } } },
@@ -33,7 +34,7 @@ payslipRouter.get("/:payslipId/download", requireAuth, async (req, res) => {
 });
 
 // Bulk download all payslips for one uploaded sheet (pay period) as a zip.
-payslipRouter.get("/sheet/:sheetId/download-all", requireAuth, async (req, res) => {
+payslipRouter.get("/sheet/:sheetId/download-all", requirePermission("payslips.view"), async (req, res) => {
   const sheet = await prisma.salarySheet.findUnique({
     where: { id: req.params.sheetId },
     include: {
@@ -63,7 +64,7 @@ payslipRouter.get("/sheet/:sheetId/download-all", requireAuth, async (req, res) 
 });
 
 // Bulk-email every payslip in a sheet to employees who have an email on file.
-payslipRouter.post("/sheet/:sheetId/send-email", requireAuth, async (req, res) => {
+payslipRouter.post("/sheet/:sheetId/send-email", requirePermission("payslips.send"), async (req, res) => {
   if (!isEmailConfigured()) {
     return res.status(503).json({ error: "Email delivery is not configured. Set SMTP_* in backend/.env." });
   }
@@ -95,7 +96,7 @@ payslipRouter.post("/sheet/:sheetId/send-email", requireAuth, async (req, res) =
 });
 
 // Bulk-WhatsApp every payslip in a sheet (as a download link) to employees who have a phone on file.
-payslipRouter.post("/sheet/:sheetId/send-whatsapp", requireAuth, async (req, res) => {
+payslipRouter.post("/sheet/:sheetId/send-whatsapp", requirePermission("payslips.send"), async (req, res) => {
   if (!isWhatsappConfigured()) {
     return res.status(503).json({ error: "WhatsApp delivery is not configured. Set TWILIO_* in backend/.env." });
   }

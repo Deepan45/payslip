@@ -17,8 +17,19 @@ import { Clients } from "./pages/Clients";
 import { AdvanceLedger } from "./pages/AdvanceLedger";
 import { Reports } from "./pages/Reports";
 import { Statutory } from "./pages/Statutory";
+import { Users } from "./pages/Users";
+import { MyAccount } from "./pages/MyAccount";
 import { PortalLogin } from "./pages/portal/PortalLogin";
 import { PortalPayslips } from "./pages/portal/PortalPayslips";
+
+/** Shorthand for one permission-gated leaf route, nested under the outer auth guard below. */
+function guarded(permission: string, path: string, element: JSX.Element) {
+  return (
+    <Route element={<ProtectedRoute permission={permission} />}>
+      <Route path={path} element={element} />
+    </Route>
+  );
+}
 
 export default function App() {
   return (
@@ -32,18 +43,22 @@ export default function App() {
               <Route path="login" element={<Login />} />
               <Route element={<ProtectedRoute />}>
                 <Route element={<AppLayout />}>
-                  <Route index element={<Dashboard />} />
-                  <Route path="upload" element={<Upload />} />
-                  <Route path="clients" element={<Clients />} />
-                  <Route path="employees" element={<Employees />} />
-                  <Route path="employees/:id" element={<EmployeeDetail />} />
-                  <Route path="history" element={<History />} />
-                  <Route path="history/:sheetId" element={<HistoryDetail />} />
-                  <Route path="payslips" element={<Payslips />} />
-                  <Route path="advances" element={<AdvanceLedger />} />
-                  <Route path="reports" element={<Reports />} />
-                  <Route path="statutory" element={<Statutory />} />
-                  <Route path="settings" element={<Settings />} />
+                  <Route element={<ProtectedRoute permission="dashboard.view" />}>
+                    <Route index element={<Dashboard />} />
+                  </Route>
+                  {guarded("upload.run", "upload", <Upload />)}
+                  {guarded("clients.view", "clients", <Clients />)}
+                  {guarded("employees.view", "employees", <Employees />)}
+                  {guarded("employees.view", "employees/:id", <EmployeeDetail />)}
+                  {guarded("history.view", "history", <History />)}
+                  {guarded("history.view", "history/:sheetId", <HistoryDetail />)}
+                  {guarded("payslips.view", "payslips", <Payslips />)}
+                  {guarded("advances.view", "advances", <AdvanceLedger />)}
+                  {guarded("reports.view", "reports", <Reports />)}
+                  {guarded("statutory.view", "statutory", <Statutory />)}
+                  {guarded("settings.manage", "settings", <Settings />)}
+                  {guarded("users.manage", "users", <Users />)}
+                  <Route path="my-account" element={<MyAccount />} />
                 </Route>
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />

@@ -5,6 +5,7 @@ import { ActionButton } from "../components/ActionButton";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { PageLoader } from "../components/PageLoader";
+import { useAuth } from "../context/AuthContext";
 
 interface Sheet {
   id: string;
@@ -22,6 +23,8 @@ const MONTH_NAMES = [
 ];
 
 export function History() {
+  const { can } = useAuth();
+  const canDelete = can("history.delete");
   const [sheets, setSheets] = useState<Sheet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +106,7 @@ export function History() {
             </span>
             <h2 style={{ margin: 0 }}>All Uploaded Sheets</h2>
           </div>
-          {selected.size > 0 && (
+          {canDelete && selected.size > 0 && (
             <ActionButton icon="delete" tone="danger" disabled={bulkDeleting} onClick={() => setConfirmBulk(true)}>
               {bulkDeleting ? "Deleting..." : `Delete ${selected.size} Selected`}
             </ActionButton>
@@ -121,9 +124,11 @@ export function History() {
             <table>
               <thead>
                 <tr>
-                  <th style={{ width: 32 }}>
-                    <input type="checkbox" checked={sheets.length > 0 && selected.size === sheets.length} onChange={(e) => toggleAll(e.target.checked)} />
-                  </th>
+                  {canDelete && (
+                    <th style={{ width: 32 }}>
+                      <input type="checkbox" checked={sheets.length > 0 && selected.size === sheets.length} onChange={(e) => toggleAll(e.target.checked)} />
+                    </th>
+                  )}
                   <th>Period</th>
                   <th>Client</th>
                   <th>File</th>
@@ -135,9 +140,11 @@ export function History() {
               <tbody>
                 {sheets.map((s) => (
                   <tr key={s.id}>
-                    <td>
-                      <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleOne(s.id)} />
-                    </td>
+                    {canDelete && (
+                      <td>
+                        <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleOne(s.id)} />
+                      </td>
+                    )}
                     <td style={{ fontWeight: 600 }}>
                       {MONTH_NAMES[s.periodMonth - 1]} {s.periodYear}
                     </td>
@@ -152,9 +159,11 @@ export function History() {
                         </svg>
                         View
                       </Link>
-                      <ActionButton icon="delete" tone="danger" disabled={deletingId === s.id} onClick={() => setConfirmTarget(s)}>
-                        {deletingId === s.id ? "Deleting..." : "Delete"}
-                      </ActionButton>
+                      {canDelete && (
+                        <ActionButton icon="delete" tone="danger" disabled={deletingId === s.id} onClick={() => setConfirmTarget(s)}>
+                          {deletingId === s.id ? "Deleting..." : "Delete"}
+                        </ActionButton>
+                      )}
                     </td>
                   </tr>
                 ))}

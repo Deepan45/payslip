@@ -1,9 +1,10 @@
 import { Router } from "express";
 import * as XLSX from "xlsx";
 import { prisma } from "../config/db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 
 export const reportsRouter = Router();
+reportsRouter.use(requireAuth, requirePermission("reports.view"));
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -80,7 +81,7 @@ async function buildReport(periodMonth: number, periodYear: number, clientId?: s
 // found on the uploaded sheets — it does not compute employer-side
 // contributions (which aren't present in these wage sheets), so treat it as
 // a wage-cost and employee-contribution summary, not a full statutory filing.
-reportsRouter.get("/summary", requireAuth, async (req, res) => {
+reportsRouter.get("/summary", async (req, res) => {
   const periodMonth = parseInt(String(req.query.periodMonth ?? ""), 10);
   const periodYear = parseInt(String(req.query.periodYear ?? ""), 10);
   const clientId = typeof req.query.clientId === "string" ? req.query.clientId : undefined;
@@ -95,7 +96,7 @@ reportsRouter.get("/summary", requireAuth, async (req, res) => {
 
 // Excel export of the same summary — same filters (periodMonth, periodYear,
 // optional clientId), so what's on screen is exactly what gets downloaded.
-reportsRouter.get("/export", requireAuth, async (req, res) => {
+reportsRouter.get("/export", async (req, res) => {
   const periodMonth = parseInt(String(req.query.periodMonth ?? ""), 10);
   const periodYear = parseInt(String(req.query.periodYear ?? ""), 10);
   const clientId = typeof req.query.clientId === "string" ? req.query.clientId : undefined;
