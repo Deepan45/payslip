@@ -48,8 +48,8 @@ export const FIELD_LABELS: Record<CanonicalField, string> = {
 export const FIELD_GROUPS: { title: string; fields: CanonicalField[] }[] = [
   { title: "Identity", fields: ["employeeCode", "name", "guardianName", "gender", "designation", "department"] },
   { title: "Bank & Statutory IDs", fields: ["bankAccount", "ifscCode", "uanNo", "esiNo", "email", "phone"] },
-  { title: "Attendance", fields: ["paidDays", "otHours", "otAmount"] },
-  { title: "Earnings", fields: ["basic", "monthlySalary", "hra", "monthlyHra", "incentive", "grossEarnings", "pfSalaryAmt"] },
+  { title: "Attendance", fields: ["paidDays", "otHours"] },
+  { title: "Earnings", fields: ["basic", "monthlySalary", "hra", "monthlyHra", "incentive", "otAmount", "grossEarnings", "pfSalaryAmt"] },
   { title: "Deductions", fields: ["esi", "epf", "lwf", "advance", "dressShoes", "otherDeduction", "totalDeductions"] },
   { title: "Result", fields: ["netPay"] },
 ];

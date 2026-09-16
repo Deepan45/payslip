@@ -140,6 +140,7 @@ model Employee {
   employeeCode       String         @unique
   name               String
   guardianName       String?
+  dob                DateTime?
   gender             String?
   designation        String?
   department         String?
