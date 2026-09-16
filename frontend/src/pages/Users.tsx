@@ -5,6 +5,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Avatar } from "../components/Avatar";
 import { EmptyState } from "../components/EmptyState";
 import { PageLoader } from "../components/PageLoader";
+import { StatCard } from "../components/StatCard";
 import { useAuth, UserRole } from "../context/AuthContext";
 
 type UserStatus = "ACTIVE" | "DISABLED";
@@ -27,6 +28,36 @@ const ROLE_OPTIONS: { value: UserRole; label: string; hint: string }[] = [
   { value: "VIEWER", label: "Viewer", hint: "Read-only access to every module" },
 ];
 const ROLE_LABEL: Record<UserRole, string> = Object.fromEntries(ROLE_OPTIONS.map((r) => [r.value, r.label])) as Record<UserRole, string>;
+const ROLE_BADGE_CLASS: Record<UserRole, string> = {
+  SUPER_ADMIN: "badge-violet",
+  PAYROLL_MANAGER: "badge-navy",
+  ACCOUNTANT: "badge-amber",
+  VIEWER: "badge-gray",
+};
+
+type Access = "full" | "view" | "none";
+
+/** What each fixed role can do, module by module — mirrors backend/src/auth/permissions.ts (ROLE_PERMISSIONS) for the humans reading this page. */
+const PERMISSION_MATRIX: { module: string; access: Record<UserRole, Access> }[] = [
+  { module: "Dashboard", access: { SUPER_ADMIN: "view", PAYROLL_MANAGER: "view", ACCOUNTANT: "view", VIEWER: "view" } },
+  { module: "Upload Salary Sheets", access: { SUPER_ADMIN: "full", PAYROLL_MANAGER: "full", ACCOUNTANT: "none", VIEWER: "none" } },
+  { module: "Clients", access: { SUPER_ADMIN: "full", PAYROLL_MANAGER: "full", ACCOUNTANT: "view", VIEWER: "view" } },
+  { module: "Employees", access: { SUPER_ADMIN: "full", PAYROLL_MANAGER: "full", ACCOUNTANT: "view", VIEWER: "view" } },
+  { module: "Employee Portal Access", access: { SUPER_ADMIN: "full", PAYROLL_MANAGER: "full", ACCOUNTANT: "none", VIEWER: "none" } },
+  { module: "Payroll History", access: { SUPER_ADMIN: "full", PAYROLL_MANAGER: "view", ACCOUNTANT: "view", VIEWER: "view" } },
+  { module: "Payslips", access: { SUPER_ADMIN: "full", PAYROLL_MANAGER: "full", ACCOUNTANT: "view", VIEWER: "view" } },
+  { module: "Advance Ledger", access: { SUPER_ADMIN: "full", PAYROLL_MANAGER: "full", ACCOUNTANT: "full", VIEWER: "view" } },
+  { module: "Reports", access: { SUPER_ADMIN: "view", PAYROLL_MANAGER: "view", ACCOUNTANT: "view", VIEWER: "view" } },
+  { module: "Statutory Filings", access: { SUPER_ADMIN: "view", PAYROLL_MANAGER: "view", ACCOUNTANT: "view", VIEWER: "view" } },
+  { module: "Company Settings", access: { SUPER_ADMIN: "full", PAYROLL_MANAGER: "none", ACCOUNTANT: "none", VIEWER: "none" } },
+  { module: "Users", access: { SUPER_ADMIN: "full", PAYROLL_MANAGER: "none", ACCOUNTANT: "none", VIEWER: "none" } },
+];
+
+function AccessCell({ access }: { access: Access }) {
+  if (access === "full") return <span className="badge badge-success">Full</span>;
+  if (access === "view") return <span className="badge badge-navy">View only</span>;
+  return <span className="muted small">—</span>;
+}
 
 interface CreateValues {
   name: string;
@@ -172,8 +203,53 @@ export function Users() {
       <h1>Users</h1>
       <p className="page-subtitle">
         Everyone who can sign in to this app, and what they're allowed to do. Roles are fixed sets of permissions —
-        see the hint under each role when adding or editing a user.
+        see the matrix below for exactly what each one can access.
       </p>
+
+      {!loading && users.length > 0 && (
+        <div className="stat-grid">
+          <StatCard icon="employees" color="violet" value={String(users.length)} label="Total Users" />
+          <StatCard icon="shield" color="green" value={String(users.filter((u) => u.status === "ACTIVE").length)} label="Active" />
+          <StatCard icon="shield" color="red" value={String(users.filter((u) => u.status === "DISABLED").length)} label="Disabled" />
+        </div>
+      )}
+
+      <div className="card">
+        <div className="section-title" style={{ marginBottom: 16 }}>
+          <span className="section-title-icon stat-icon-pink">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          </span>
+          <h2 style={{ margin: 0 }}>Roles &amp; Permissions</h2>
+        </div>
+        <div className="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Module</th>
+                {ROLE_OPTIONS.map((r) => (
+                  <th key={r.value} style={{ textAlign: "center" }}>
+                    <span className={`badge ${ROLE_BADGE_CLASS[r.value]}`}>{r.label}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {PERMISSION_MATRIX.map((row) => (
+                <tr key={row.module}>
+                  <td style={{ fontWeight: 600 }}>{row.module}</td>
+                  {ROLE_OPTIONS.map((r) => (
+                    <td key={r.value} style={{ textAlign: "center" }}>
+                      <AccessCell access={row.access[r.value]} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div className="card">
         <div className="section-title toolbar" style={{ justifyContent: "space-between", marginBottom: showForm ? 16 : 0 }}>
@@ -264,7 +340,7 @@ export function Users() {
                       </td>
                       <td>{u.email}</td>
                       <td>
-                        <span className="badge badge-navy">{ROLE_LABEL[u.role]}</span>
+                        <span className={`badge ${ROLE_BADGE_CLASS[u.role]}`}>{ROLE_LABEL[u.role]}</span>
                       </td>
                       <td>
                         {u.status === "ACTIVE" ? (
@@ -275,7 +351,7 @@ export function Users() {
                         {u.mustChangePassword && <span className="badge badge-warn" style={{ marginLeft: 6 }}>Temp password</span>}
                       </td>
                       <td className="muted small">{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "Never"}</td>
-                      <td className="actions">
+                      <td className="actions actions-wrap">
                         <ActionButton icon="edit" onClick={() => startEdit(u)} disabled={isSelf}>
                           Edit Role
                         </ActionButton>

@@ -600,6 +600,9 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--color-border); }
 th { color: var(--color-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
 td.actions { white-space: nowrap; }
+/* Rows with more than 2-3 actions (e.g. Users) wrap onto a second line instead of forcing horizontal scroll. */
+td.actions-wrap { white-space: normal; min-width: 220px; }
+td.actions-wrap .btn-action { margin-bottom: 6px; }
 th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Corporate table: clean light header, zebra rows, contained rounded frame.
@@ -654,6 +657,11 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .badge-success { background: var(--color-success-bg); color: var(--color-success-text); }
 .badge-warn { background: var(--color-warning-bg); color: var(--color-warning-text); }
 .badge-error { background: var(--color-error-bg); color: var(--color-error); }
+.badge-violet { background: #efedfb; color: #6b57d8; }
+.badge-amber { background: #fef3e0; color: #b06d00; }
+.badge-aqua { background: #e6f7f1; color: #1baf7a; }
+.badge-gray { background: #f1f2f7; color: #6b7280; }
+.badge-outline { background: none; border: 1px solid var(--color-border-strong); color: var(--color-muted); }
 
 .pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; flex-wrap: wrap; gap: 10px; }
 .pagination-controls { display: flex; align-items: center; gap: 4px; }
@@ -928,6 +936,27 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 }
 
 .page-subtitle { color: var(--color-muted); font-size: 13px; margin: -10px 0 20px; max-width: 640px; }
+
+/* Underline tab nav — Settings page section switcher */
+.settings-tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1.5px solid var(--color-border); overflow-x: auto; }
+.settings-tab {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 14px 12px;
+  border: none; background: none; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--color-muted);
+  border-bottom: 2.5px solid transparent; margin-bottom: -1.5px;
+  white-space: nowrap;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.settings-tab .section-title-icon { width: 26px; height: 26px; opacity: 0.75; transition: opacity 0.12s ease; }
+.settings-tab:hover { color: var(--color-navy); }
+.settings-tab:hover .section-title-icon { opacity: 1; }
+.settings-tab.active { color: var(--color-navy); border-bottom-color: var(--color-accent); }
+.settings-tab.active .section-title-icon { opacity: 1; }
+@media (max-width: 520px) {
+  .settings-tab { padding: 8px 10px 10px; font-size: 12px; }
+  .settings-tab .section-title-icon { width: 22px; height: 22px; }
+}
 
 .info-callout {
   background: var(--color-navy-tint);

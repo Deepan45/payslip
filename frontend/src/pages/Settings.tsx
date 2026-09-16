@@ -36,9 +36,12 @@ interface Company {
   billingTerms: string | null;
 }
 
+type SettingsTab = "profile" | "statutory" | "billing";
+
 export function Settings() {
   const { can } = useAuth();
   const canManage = can("settings.manage");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
   const [company, setCompany] = useState<Company | null>(null);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
@@ -175,7 +178,34 @@ export function Settings() {
         {error && <div className="alert alert-error">{error}</div>}
         {message && <div className="alert alert-success">{message}</div>}
 
-        <div className="card" style={{ maxWidth: 560 }}>
+        <div className="settings-tabs">
+          <button type="button" className={`settings-tab ${activeTab === "profile" ? "active" : ""}`} onClick={() => setActiveTab("profile")}>
+            <span className="section-title-icon stat-icon-blue">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 21h18M6 21V8l6-4 6 4v13M9 21v-6h6v6M9 12h.01M15 12h.01M9 8h.01M15 8h.01" />
+              </svg>
+            </span>
+            Company Profile
+          </button>
+          <button type="button" className={`settings-tab ${activeTab === "statutory" ? "active" : ""}`} onClick={() => setActiveTab("statutory")}>
+            <span className="section-title-icon stat-icon-pink">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3v18h18M8 17V10M13 17V6M18 17v-4" />
+              </svg>
+            </span>
+            Statutory Filing
+          </button>
+          <button type="button" className={`settings-tab ${activeTab === "billing" ? "active" : ""}`} onClick={() => setActiveTab("billing")}>
+            <span className="section-title-icon stat-icon-aqua">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 10h20M6 15h2M2 6h20v12H2z" />
+              </svg>
+            </span>
+            Billing &amp; Invoice
+          </button>
+        </div>
+
+        <div className="card" style={{ maxWidth: 560, display: activeTab === "profile" ? undefined : "none" }}>
           <div className="section-title" style={{ marginBottom: 16 }}>
             <span className="section-title-icon stat-icon-blue">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -235,7 +265,7 @@ export function Settings() {
           )}
         </div>
 
-        <div className="card" style={{ maxWidth: 560, marginTop: 20 }}>
+        <div className="card" style={{ maxWidth: 560, display: activeTab === "statutory" ? undefined : "none" }}>
           <div className="section-title" style={{ marginBottom: 16 }}>
             <span className="section-title-icon stat-icon-pink">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -338,7 +368,7 @@ export function Settings() {
           </div>
         </div>
 
-        <div className="card" style={{ maxWidth: 560, marginTop: 20 }}>
+        <div className="card" style={{ maxWidth: 560, display: activeTab === "billing" ? undefined : "none" }}>
           <div className="section-title" style={{ marginBottom: 16 }}>
             <span className="section-title-icon stat-icon-aqua">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
