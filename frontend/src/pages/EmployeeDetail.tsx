@@ -26,6 +26,8 @@ interface EmployeeDetail {
   employeeCode: string;
   name: string;
   guardianName: string | null;
+  dob: string | null;
+  aadhaarNo: string | null;
   designation: string | null;
   department: string | null;
   bankAccount: string | null;
@@ -49,6 +51,8 @@ export function EmployeeDetail() {
   const [editing, setEditing] = useState(false);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [dob, setDob] = useState("");
+  const [aadhaarNo, setAadhaarNo] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
@@ -63,6 +67,8 @@ export function EmployeeDetail() {
         setEmployee(res.data.employee);
         setEmail(res.data.employee.email ?? "");
         setPhone(res.data.employee.phone ?? "");
+        setDob(res.data.employee.dob ? res.data.employee.dob.slice(0, 10) : "");
+        setAadhaarNo(res.data.employee.aadhaarNo ?? "");
       })
       .finally(() => setLoading(false));
   }
@@ -75,7 +81,7 @@ export function EmployeeDetail() {
     setError(null);
     setSaving(true);
     try {
-      await api.put(`/employees/${id}`, { email, phone });
+      await api.put(`/employees/${id}`, { email, phone, dob, aadhaarNo });
       setEditing(false);
       load();
     } catch (err) {
@@ -162,6 +168,14 @@ export function EmployeeDetail() {
             <div>{employee.guardianName ?? "-"}</div>
           </div>
           <div>
+            <strong>Date of Birth</strong>
+            <div>{employee.dob ? new Date(employee.dob).toLocaleDateString() : "-"}</div>
+          </div>
+          <div>
+            <strong>Aadhaar No</strong>
+            <div>{employee.aadhaarNo ?? "-"}</div>
+          </div>
+          <div>
             <strong>Designation</strong>
             <div>{employee.designation ?? "-"}</div>
           </div>
@@ -200,7 +214,7 @@ export function EmployeeDetail() {
                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6" />
               </svg>
             </span>
-            <h2 style={{ margin: 0 }}>Contact & Portal Access</h2>
+            <h2 style={{ margin: 0 }}>Contact & Personal Details</h2>
           </div>
           {!editing && canManage && (
             <ActionButton icon="edit" onClick={() => setEditing(true)}>
@@ -219,6 +233,19 @@ export function EmployeeDetail() {
             <label>
               Phone (for WhatsApp delivery, with country code e.g. +91...)
               <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 XXXXX XXXXX" />
+            </label>
+            <label>
+              Date of Birth
+              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+            </label>
+            <label>
+              Aadhaar No
+              <input
+                value={aadhaarNo}
+                onChange={(e) => setAadhaarNo(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                placeholder="12-digit Aadhaar number"
+                inputMode="numeric"
+              />
             </label>
             <button type="submit" className="btn-primary" disabled={saving}>
               {saving ? "Saving..." : "Save"}

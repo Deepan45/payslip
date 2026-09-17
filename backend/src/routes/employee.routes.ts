@@ -33,9 +33,27 @@ employeeRouter.get("/:id", requireAuth, requirePermission("employees.view"), asy
 });
 
 employeeRouter.put("/:id", requireAuth, requirePermission("employees.manage"), async (req, res) => {
-  const { email, phone } = req.body as { email?: string; phone?: string };
+  const { email, phone, dob, aadhaarNo } = req.body as {
+    email?: string;
+    phone?: string;
+    dob?: string | null;
+    aadhaarNo?: string | null;
+  };
+
+  if (aadhaarNo && !/^\d{12}$/.test(aadhaarNo)) {
+    return res.status(400).json({ error: "Aadhaar number must be exactly 12 digits" });
+  }
+
   try {
-    const employee = await prisma.employee.update({ where: { id: req.params.id }, data: { email, phone } });
+    const employee = await prisma.employee.update({
+      where: { id: req.params.id },
+      data: {
+        email,
+        phone,
+        dob: dob ? new Date(dob) : dob === "" ? null : undefined,
+        aadhaarNo: aadhaarNo === "" ? null : aadhaarNo,
+      },
+    });
     res.json({ employee });
   } catch {
     res.status(404).json({ error: "Employee not found" });
