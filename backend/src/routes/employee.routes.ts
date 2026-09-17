@@ -33,16 +33,36 @@ employeeRouter.get("/:id", requireAuth, requirePermission("employees.view"), asy
 });
 
 employeeRouter.put("/:id", requireAuth, requirePermission("employees.manage"), async (req, res) => {
-  const { email, phone, dob, aadhaarNo } = req.body as {
+  const {
+    email, phone, dob, aadhaarNo,
+    isIndianNational, passportNo, epfNo, dateOfJoining, dateOfRelieving, qualification, domicileOfHaryana,
+    guardianName, designation, department, bankAccount, ifscCode, uanNo, esiNo,
+  } = req.body as {
     email?: string;
     phone?: string;
     dob?: string | null;
     aadhaarNo?: string | null;
+    isIndianNational?: boolean;
+    passportNo?: string | null;
+    epfNo?: string | null;
+    dateOfJoining?: string | null;
+    dateOfRelieving?: string | null;
+    qualification?: string | null;
+    domicileOfHaryana?: boolean | null;
+    guardianName?: string;
+    designation?: string;
+    department?: string;
+    bankAccount?: string;
+    ifscCode?: string;
+    uanNo?: string;
+    esiNo?: string;
   };
 
   if (aadhaarNo && !/^\d{12}$/.test(aadhaarNo)) {
     return res.status(400).json({ error: "Aadhaar number must be exactly 12 digits" });
   }
+
+  const toDate = (v: string | null | undefined) => (v ? new Date(v) : v === "" ? null : undefined);
 
   try {
     const employee = await prisma.employee.update({
@@ -50,8 +70,22 @@ employeeRouter.put("/:id", requireAuth, requirePermission("employees.manage"), a
       data: {
         email,
         phone,
-        dob: dob ? new Date(dob) : dob === "" ? null : undefined,
+        dob: toDate(dob),
         aadhaarNo: aadhaarNo === "" ? null : aadhaarNo,
+        isIndianNational,
+        passportNo: passportNo === "" ? null : passportNo,
+        epfNo: epfNo === "" ? null : epfNo,
+        dateOfJoining: toDate(dateOfJoining),
+        dateOfRelieving: toDate(dateOfRelieving),
+        qualification: qualification === "" ? null : qualification,
+        domicileOfHaryana,
+        guardianName,
+        designation,
+        department,
+        bankAccount,
+        ifscCode,
+        uanNo,
+        esiNo,
       },
     });
     res.json({ employee });

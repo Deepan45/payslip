@@ -8,6 +8,7 @@ import {
   buildEsiFileCsv,
   buildLwfChallanRows,
 } from "../services/statutory.service";
+import { buildLwfWorkerFileRows, LWF_WORKER_FILE_HEADER } from "../services/lwfWorkerFile.service";
 
 export const statutoryRouter = Router();
 statutoryRouter.use(requireAuth, requirePermission("statutory.view"));
@@ -124,5 +125,33 @@ statutoryRouter.get("/lwf/challan-file", async (req, res) => {
 
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="LWF-Challan-${monthLabel}-${period.periodYear}.xlsx"`);
+  res.send(buffer);
+});
+
+// LWF Worker Data File — the annual Haryana LWF portal bulk-worker-upload
+// template, built from current Employee records (not period-specific — this
+// is the whole current roster, unlike the monthly PF/ESI/LWF challan files).
+statutoryRouter.get("/lwf/worker-data-summary", async (_req, res) => {
+  const { summary, rows } = await buildLwfWorkerFileRows();
+  const incompleteEmployees = rows.filter((r) => r.missing.length > 0).map((r) => ({
+    employeeCode: r.employeeCode,
+    name: r.name,
+    missing: r.missing,
+  }));
+  res.json({ summary, incompleteEmployees });
+});
+
+statutoryRouter.get("/lwf/worker-data-file", async (_req, res) => {
+  const { rows } = await buildLwfWorkerFileRows();
+  const aoa = [LWF_WORKER_FILE_HEADER, ...rows.map((r) => r.cells)];
+
+  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+  worksheet["!cols"] = LWF_WORKER_FILE_HEADER.map(() => ({ wch: 20 }));
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "LWF Worker Data");
+  const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="LWF-Worker-Data-File-${new Date().getFullYear()}.xlsx"`);
   res.send(buffer);
 });

@@ -142,6 +142,13 @@ model Employee {
   guardianName       String?
   dob                DateTime?
   aadhaarNo          String?
+  isIndianNational   Boolean        @default(true)
+  passportNo         String? // used instead of aadhaarNo on the LWF worker data file when isIndianNational is false
+  epfNo              String? // EPF member number — distinct from uanNo, needed for the LWF worker data file
+  dateOfJoining      DateTime?
+  dateOfRelieving    DateTime?
+  qualification      String?
+  domicileOfHaryana  Boolean?
   gender             String?
   designation        String?
   department         String?

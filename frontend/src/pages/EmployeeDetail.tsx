@@ -28,6 +28,13 @@ interface EmployeeDetail {
   guardianName: string | null;
   dob: string | null;
   aadhaarNo: string | null;
+  isIndianNational: boolean;
+  passportNo: string | null;
+  epfNo: string | null;
+  dateOfJoining: string | null;
+  dateOfRelieving: string | null;
+  qualification: string | null;
+  domicileOfHaryana: boolean | null;
   designation: string | null;
   department: string | null;
   bankAccount: string | null;
@@ -53,6 +60,20 @@ export function EmployeeDetail() {
   const [phone, setPhone] = useState("");
   const [dob, setDob] = useState("");
   const [aadhaarNo, setAadhaarNo] = useState("");
+  const [isIndianNational, setIsIndianNational] = useState(true);
+  const [passportNo, setPassportNo] = useState("");
+  const [epfNo, setEpfNo] = useState("");
+  const [dateOfJoining, setDateOfJoining] = useState("");
+  const [dateOfRelieving, setDateOfRelieving] = useState("");
+  const [qualification, setQualification] = useState("");
+  const [domicileOfHaryana, setDomicileOfHaryana] = useState("");
+  const [guardianName, setGuardianName] = useState("");
+  const [designation, setDesignation] = useState("");
+  const [department, setDepartment] = useState("");
+  const [bankAccount, setBankAccount] = useState("");
+  const [ifscCode, setIfscCode] = useState("");
+  const [uanNo, setUanNo] = useState("");
+  const [esiNo, setEsiNo] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
@@ -69,6 +90,22 @@ export function EmployeeDetail() {
         setPhone(res.data.employee.phone ?? "");
         setDob(res.data.employee.dob ? res.data.employee.dob.slice(0, 10) : "");
         setAadhaarNo(res.data.employee.aadhaarNo ?? "");
+        setIsIndianNational(res.data.employee.isIndianNational ?? true);
+        setPassportNo(res.data.employee.passportNo ?? "");
+        setEpfNo(res.data.employee.epfNo ?? "");
+        setDateOfJoining(res.data.employee.dateOfJoining ? res.data.employee.dateOfJoining.slice(0, 10) : "");
+        setDateOfRelieving(res.data.employee.dateOfRelieving ? res.data.employee.dateOfRelieving.slice(0, 10) : "");
+        setQualification(res.data.employee.qualification ?? "");
+        setDomicileOfHaryana(
+          res.data.employee.domicileOfHaryana === true ? "yes" : res.data.employee.domicileOfHaryana === false ? "no" : ""
+        );
+        setGuardianName(res.data.employee.guardianName ?? "");
+        setDesignation(res.data.employee.designation ?? "");
+        setDepartment(res.data.employee.department ?? "");
+        setBankAccount(res.data.employee.bankAccount ?? "");
+        setIfscCode(res.data.employee.ifscCode ?? "");
+        setUanNo(res.data.employee.uanNo ?? "");
+        setEsiNo(res.data.employee.esiNo ?? "");
       })
       .finally(() => setLoading(false));
   }
@@ -81,7 +118,14 @@ export function EmployeeDetail() {
     setError(null);
     setSaving(true);
     try {
-      await api.put(`/employees/${id}`, { email, phone, dob, aadhaarNo });
+      await api.put(`/employees/${id}`, {
+        email, phone, dob, aadhaarNo,
+        isIndianNational,
+        passportNo: isIndianNational ? "" : passportNo,
+        epfNo, dateOfJoining, dateOfRelieving, qualification,
+        domicileOfHaryana: domicileOfHaryana === "yes" ? true : domicileOfHaryana === "no" ? false : null,
+        guardianName, designation, department, bankAccount, ifscCode, uanNo, esiNo,
+      });
       setEditing(false);
       load();
     } catch (err) {
@@ -176,6 +220,36 @@ export function EmployeeDetail() {
             <div>{employee.aadhaarNo ?? "-"}</div>
           </div>
           <div>
+            <strong>Nationality</strong>
+            <div>{employee.isIndianNational ? "Indian" : "Non-Indian"}</div>
+          </div>
+          {!employee.isIndianNational && (
+            <div>
+              <strong>Passport No</strong>
+              <div>{employee.passportNo ?? "-"}</div>
+            </div>
+          )}
+          <div>
+            <strong>EPF No</strong>
+            <div>{employee.epfNo ?? "-"}</div>
+          </div>
+          <div>
+            <strong>Date of Joining</strong>
+            <div>{employee.dateOfJoining ? new Date(employee.dateOfJoining).toLocaleDateString() : "-"}</div>
+          </div>
+          <div>
+            <strong>Date of Relieving</strong>
+            <div>{employee.dateOfRelieving ? new Date(employee.dateOfRelieving).toLocaleDateString() : "-"}</div>
+          </div>
+          <div>
+            <strong>Qualification</strong>
+            <div>{employee.qualification ?? "-"}</div>
+          </div>
+          <div>
+            <strong>Domicile of Haryana</strong>
+            <div>{employee.domicileOfHaryana === true ? "Yes" : employee.domicileOfHaryana === false ? "No" : "-"}</div>
+          </div>
+          <div>
             <strong>Designation</strong>
             <div>{employee.designation ?? "-"}</div>
           </div>
@@ -235,6 +309,38 @@ export function EmployeeDetail() {
               <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 XXXXX XXXXX" />
             </label>
             <label>
+              Guardian's Name
+              <input value={guardianName} onChange={(e) => setGuardianName(e.target.value)} placeholder="Father's / Husband's name" />
+            </label>
+            <div className="form-row">
+              <label>
+                Designation
+                <input value={designation} onChange={(e) => setDesignation(e.target.value)} />
+              </label>
+              <label>
+                Department / Site
+                <input value={department} onChange={(e) => setDepartment(e.target.value)} />
+              </label>
+            </div>
+            <label>
+              Bank Account No
+              <input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
+            </label>
+            <div className="form-row">
+              <label>
+                IFSC Code
+                <input value={ifscCode} onChange={(e) => setIfscCode(e.target.value)} />
+              </label>
+              <label>
+                UAN No
+                <input value={uanNo} onChange={(e) => setUanNo(e.target.value)} />
+              </label>
+            </div>
+            <label>
+              ESI No
+              <input value={esiNo} onChange={(e) => setEsiNo(e.target.value)} />
+            </label>
+            <label>
               Date of Birth
               <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
             </label>
@@ -246,6 +352,45 @@ export function EmployeeDetail() {
                 placeholder="12-digit Aadhaar number"
                 inputMode="numeric"
               />
+            </label>
+            <label>
+              Nationality
+              <select value={isIndianNational ? "indian" : "non-indian"} onChange={(e) => setIsIndianNational(e.target.value === "indian")}>
+                <option value="indian">Indian</option>
+                <option value="non-indian">Non-Indian</option>
+              </select>
+            </label>
+            {!isIndianNational && (
+              <label>
+                Passport No
+                <input value={passportNo} onChange={(e) => setPassportNo(e.target.value)} placeholder="Passport number" />
+              </label>
+            )}
+            <label>
+              EPF No
+              <input value={epfNo} onChange={(e) => setEpfNo(e.target.value)} placeholder="EPF member number" />
+            </label>
+            <div className="form-row">
+              <label>
+                Date of Joining
+                <input type="date" value={dateOfJoining} onChange={(e) => setDateOfJoining(e.target.value)} />
+              </label>
+              <label>
+                Date of Relieving
+                <input type="date" value={dateOfRelieving} onChange={(e) => setDateOfRelieving(e.target.value)} />
+              </label>
+            </div>
+            <label>
+              Qualification
+              <input value={qualification} onChange={(e) => setQualification(e.target.value)} placeholder="e.g. 10th pass, Graduate" />
+            </label>
+            <label>
+              Domicile of Haryana
+              <select value={domicileOfHaryana} onChange={(e) => setDomicileOfHaryana(e.target.value)}>
+                <option value="">Not set</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
             </label>
             <button type="submit" className="btn-primary" disabled={saving}>
               {saving ? "Saving..." : "Save"}

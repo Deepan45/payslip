@@ -46,6 +46,11 @@ interface LwfSummary {
   grandTotal: number;
 }
 
+interface LwfWorkerFileSummary {
+  summary: { total: number; complete: number; incomplete: number };
+  incompleteEmployees: { employeeCode: string; name: string; missing: string[] }[];
+}
+
 async function downloadFile(url: string, params: Record<string, unknown>, filename: string) {
   const res = await api.get(url, { params, responseType: "blob" });
   const blobUrl = URL.createObjectURL(res.data);
@@ -69,6 +74,9 @@ export function Statutory() {
   const [esicEmployerCode, setEsicEmployerCode] = useState<string | null>(null);
   const [lwf, setLwf] = useState<LwfSummary | null>(null);
   const [lwfRegistrationNo, setLwfRegistrationNo] = useState<string | null>(null);
+
+  const [lwfWorkerFile, setLwfWorkerFile] = useState<LwfWorkerFileSummary | null>(null);
+  const [lwfWorkerFileLoading, setLwfWorkerFileLoading] = useState(true);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +106,25 @@ export function Statutory() {
   }
 
   useEffect(load, [month, year]);
+
+  useEffect(() => {
+    setLwfWorkerFileLoading(true);
+    api
+      .get("/statutory/lwf/worker-data-summary")
+      .then((res) => setLwfWorkerFile(res.data))
+      .finally(() => setLwfWorkerFileLoading(false));
+  }, []);
+
+  async function handleDownloadWorkerFile() {
+    setDownloading("lwf-worker-file");
+    try {
+      await downloadFile("/statutory/lwf/worker-data-file", {}, `LWF-Worker-Data-File-${new Date().getFullYear()}.xlsx`);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Failed to download file"));
+    } finally {
+      setDownloading(null);
+    }
+  }
 
   async function handleDownload(key: string, url: string, filename: string) {
     setDownloading(key);
@@ -251,6 +278,51 @@ export function Statutory() {
               </tbody>
             </table>
           </div>
+        )}
+      </div>
+
+      {/* LWF Worker Data File — annual roster export, not tied to the month/year selector above */}
+      <div className="card" style={{ maxWidth: 900, marginTop: 20 }}>
+        <div className="toolbar" style={{ justifyContent: "space-between", marginBottom: 16 }}>
+          <h2 style={{ margin: 0 }}>LWF — Worker Data File (Annual)</h2>
+          <ActionButton
+            icon="download"
+            disabled={lwfWorkerFileLoading || downloading === "lwf-worker-file"}
+            onClick={handleDownloadWorkerFile}
+          >
+            {downloading === "lwf-worker-file" ? "Downloading..." : "Download Worker Data File"}
+          </ActionButton>
+        </div>
+        <p className="small">
+          The Haryana LWF portal's bulk worker-upload template, built from current Employee records — the whole
+          roster, not a specific pay period. Fields with no data anywhere in the system (Nationality, EPF-No,
+          Date of Joining/Relieving, Qualification, Domicile) come through blank; fill them in per employee on
+          the Employee Detail page before submitting.
+        </p>
+        {lwfWorkerFile && (
+          <>
+            <p className="small">
+              {lwfWorkerFile.summary.complete} of {lwfWorkerFile.summary.total} employees have every required
+              field filled in; {lwfWorkerFile.summary.incomplete} are missing at least one.
+            </p>
+            {lwfWorkerFile.incompleteEmployees.length > 0 && (
+              <div className="table-container" style={{ maxHeight: 300, overflowY: "auto" }}>
+                <table>
+                  <thead>
+                    <tr><th>Employee</th><th>Missing fields</th></tr>
+                  </thead>
+                  <tbody>
+                    {lwfWorkerFile.incompleteEmployees.map((e) => (
+                      <tr key={e.employeeCode}>
+                        <td>{e.name} ({e.employeeCode})</td>
+                        <td>{e.missing.join(", ")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
