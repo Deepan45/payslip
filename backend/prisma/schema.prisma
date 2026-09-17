@@ -67,10 +67,13 @@ model CompanySettings {
   // change over time. Defaults are the commonly published current rates —
   // verify against the live EPFO/ESIC/state LWF rules before a first real
   // filing; do not trust the defaults blindly for a live challan/ECR.
+  epfEmployerTotalRate Float @default(12) // employer share -> EPF+EPS combined, % of EPF wages, before splitting
+                                           // into EPS (epfEmployerEpsRate) and the EPF-proper remainder
   epfEmployerEpsRate Float @default(8.33) // employer share -> EPS, % of EPS wages (capped at epsWageCeiling)
   epfEmployerPfRate  Float @default(3.67) // employer share -> EPF proper, % of EPF wages (used as a fallback; the
-                                           // ECR generator actually computes this as 12% of EPF wages minus the
-                                           // EPS amount, which is only equal to this flat rate below the ceiling)
+                                           // ECR generator actually computes this as epfEmployerTotalRate of EPF
+                                           // wages minus the EPS amount, which only equals this flat rate when
+                                           // epfEmployerTotalRate is 12)
   epfEdliRate        Float @default(0.5)  // employer -> EDLI insurance, % of EDLI wages (capped at epsWageCeiling)
   epfAdminChargeRate Float @default(0.5)  // employer -> EPF admin charges, % of EPF wages
   epfAdminChargeMin  Float @default(500)  // statutory minimum monthly EPF admin charge when there's >=1 member

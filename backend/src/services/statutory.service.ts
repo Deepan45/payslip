@@ -88,9 +88,9 @@ export function employerEpfForRow(pfSalaryAmt: number, company: CompanySettings)
   const epfWages = round2(pfSalaryAmt);
   const epsWages = round2(Math.min(pfSalaryAmt, company.epsWageCeiling));
   const edliWages = round2(Math.min(pfSalaryAmt, company.epsWageCeiling));
-  const employerTotal12pc = epfWages * 0.12;
+  const employerTotal = epfWages * (company.epfEmployerTotalRate / 100);
   const epsContriEmployer = round2(epsWages * (company.epfEmployerEpsRate / 100));
-  const epfContriEmployerDiff = round2(employerTotal12pc - epsContriEmployer);
+  const epfContriEmployerDiff = round2(employerTotal - epsContriEmployer);
   const edli = round2(edliWages * (company.epfEdliRate / 100));
   return { epsContriEmployer, epfContriEmployerDiff, edli };
 }
@@ -159,9 +159,9 @@ function buildPfLines(rows: StatutoryEmployeeAgg[], company: CompanySettings) {
     const epfWages = round2(row.pfSalaryAmt);
     const epsWages = round2(Math.min(row.pfSalaryAmt, company.epsWageCeiling));
     const edliWages = round2(Math.min(row.pfSalaryAmt, company.epsWageCeiling));
-    const employerTotal12pc = epfWages * 0.12;
+    const employerTotal = epfWages * (company.epfEmployerTotalRate / 100);
     const epsContriEmployer = round2(epsWages * (company.epfEmployerEpsRate / 100));
-    const epfContriEmployerDiff = round2(employerTotal12pc - epsContriEmployer);
+    const epfContriEmployerDiff = round2(employerTotal - epsContriEmployer);
 
     lines.push({
       uan: row.uanNo,

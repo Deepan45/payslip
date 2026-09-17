@@ -27,7 +27,7 @@ companyRouter.put("/", requireAuth, requirePermission("settings.manage"), async 
   const {
     name, address, mobile, officePhone, email, website,
     pfEstablishmentId, esicEmployerCode, lwfRegistrationNo,
-    epfEmployerEpsRate, epfEmployerPfRate, epfEdliRate, epfAdminChargeRate, epfAdminChargeMin, epsWageCeiling,
+    epfEmployerTotalRate, epfEmployerEpsRate, epfEmployerPfRate, epfEdliRate, epfAdminChargeRate, epfAdminChargeMin, epsWageCeiling,
     esiEmployerRate, esiWageCeiling,
     lwfEmployeeRate, lwfEmployeeMaxAmt, lwfEmployerRate, lwfEmployerMaxAmt,
     gstin, bankName, bankAccountNo, bankIfscCode, billingTerms,
@@ -41,6 +41,7 @@ companyRouter.put("/", requireAuth, requirePermission("settings.manage"), async 
     pfEstablishmentId?: string;
     esicEmployerCode?: string;
     lwfRegistrationNo?: string;
+    epfEmployerTotalRate?: number;
     epfEmployerEpsRate?: number;
     epfEmployerPfRate?: number;
     epfEdliRate?: number;
@@ -65,6 +66,7 @@ companyRouter.put("/", requireAuth, requirePermission("settings.manage"), async 
     name, address, mobile, officePhone, email, website,
     pfEstablishmentId, esicEmployerCode, lwfRegistrationNo,
     gstin, bankName, bankAccountNo, bankIfscCode, billingTerms,
+    ...(epfEmployerTotalRate !== undefined && { epfEmployerTotalRate }),
     ...(epfEmployerEpsRate !== undefined && { epfEmployerEpsRate }),
     ...(epfEmployerPfRate !== undefined && { epfEmployerPfRate }),
     ...(epfEdliRate !== undefined && { epfEdliRate }),

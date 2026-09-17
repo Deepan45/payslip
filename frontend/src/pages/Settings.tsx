@@ -16,6 +16,7 @@ interface Company {
   pfEstablishmentId: string | null;
   esicEmployerCode: string | null;
   lwfRegistrationNo: string | null;
+  epfEmployerTotalRate: number;
   epfEmployerEpsRate: number;
   epfEmployerPfRate: number;
   epfEdliRate: number;
@@ -63,6 +64,7 @@ export function Settings() {
   const [pfEstablishmentId, setPfEstablishmentId] = useState("");
   const [esicEmployerCode, setEsicEmployerCode] = useState("");
   const [lwfRegistrationNo, setLwfRegistrationNo] = useState("");
+  const [epfEmployerTotalRate, setEpfEmployerTotalRate] = useState(12);
   const [epfEmployerEpsRate, setEpfEmployerEpsRate] = useState(8.33);
   const [epfEmployerPfRate, setEpfEmployerPfRate] = useState(3.67);
   const [epfEdliRate, setEpfEdliRate] = useState(0.5);
@@ -98,6 +100,7 @@ export function Settings() {
     setPfEstablishmentId(c.pfEstablishmentId ?? "");
     setEsicEmployerCode(c.esicEmployerCode ?? "");
     setLwfRegistrationNo(c.lwfRegistrationNo ?? "");
+    setEpfEmployerTotalRate(c.epfEmployerTotalRate);
     setEpfEmployerEpsRate(c.epfEmployerEpsRate);
     setEpfEmployerPfRate(c.epfEmployerPfRate);
     setEpfEdliRate(c.epfEdliRate);
@@ -133,7 +136,7 @@ export function Settings() {
       const res = await api.put("/company", {
         name, address, mobile, officePhone, email, website,
         pfEstablishmentId, esicEmployerCode, lwfRegistrationNo,
-        epfEmployerEpsRate, epfEmployerPfRate, epfEdliRate, epfAdminChargeRate, epfAdminChargeMin, epsWageCeiling,
+        epfEmployerTotalRate, epfEmployerEpsRate, epfEmployerPfRate, epfEdliRate, epfAdminChargeRate, epfAdminChargeMin, epsWageCeiling,
         esiEmployerRate, esiWageCeiling,
         lwfEmployeeRate, lwfEmployeeMaxAmt, lwfEmployerRate, lwfEmployerMaxAmt,
         gstin, bankName, bankAccountNo, bankIfscCode, billingTerms,
@@ -326,29 +329,35 @@ export function Settings() {
           <p className="small" style={{ marginTop: 12, marginBottom: 4, fontWeight: 600 }}>PF (EPF/EPS/EDLI) rates</p>
           <div className="form-row">
             <label>
+              Employer total rate (%)
+              <input type="number" step="0.01" value={epfEmployerTotalRate} onChange={(e) => setEpfEmployerTotalRate(parseFloat(e.target.value) || 0)} />
+            </label>
+            <label>
               Employer EPS rate (%)
               <input type="number" step="0.01" value={epfEmployerEpsRate} onChange={(e) => setEpfEmployerEpsRate(parseFloat(e.target.value) || 0)} />
             </label>
+          </div>
+          <div className="form-row">
             <label>
               Employer EPF rate (%)
               <input type="number" step="0.01" value={epfEmployerPfRate} onChange={(e) => setEpfEmployerPfRate(parseFloat(e.target.value) || 0)} />
             </label>
-          </div>
-          <div className="form-row">
             <label>
               EDLI rate (%)
               <input type="number" step="0.01" value={epfEdliRate} onChange={(e) => setEpfEdliRate(parseFloat(e.target.value) || 0)} />
             </label>
+          </div>
+          <div className="form-row">
             <label>
               Admin charge rate (%)
               <input type="number" step="0.01" value={epfAdminChargeRate} onChange={(e) => setEpfAdminChargeRate(parseFloat(e.target.value) || 0)} />
             </label>
-          </div>
-          <div className="form-row">
             <label>
               Min. admin charge (₹/month)
               <input type="number" step="0.01" value={epfAdminChargeMin} onChange={(e) => setEpfAdminChargeMin(parseFloat(e.target.value) || 0)} />
             </label>
+          </div>
+          <div className="form-row">
             <label>
               EPS/EDLI wage ceiling (₹)
               <input type="number" step="1" value={epsWageCeiling} onChange={(e) => setEpsWageCeiling(parseFloat(e.target.value) || 0)} />
