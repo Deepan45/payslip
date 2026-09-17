@@ -95,17 +95,17 @@ export function employerEpfForRow(pfSalaryAmt: number, company: CompanySettings)
   return { epsContriEmployer, epfContriEmployerDiff, edli };
 }
 
-/** Employer-side ESI cost for one employee this period — only applies if the employee is on ESI (`esiDeducted` > 0). */
+/** Employer-side ESI cost for one employee this period — only applies if the employee is on ESI
+ * (`esiDeducted` > 0) and their gross wages are within the ESI coverage ceiling. */
 export function employerEsiForRow(grossEarnings: number, esiDeducted: number, company: CompanySettings): number {
-  if (esiDeducted <= 0) return 0;
+  if (esiDeducted <= 0 || grossEarnings > company.esiWageCeiling) return 0;
   return round2(grossEarnings * (company.esiEmployerRate / 100));
 }
 
-/** Employer-side LWF cost for one employee this period, two-slab (matches buildLwfChallanRows). */
+/** Employer-side LWF cost for one employee this period: % of gross wages, capped (matches buildLwfChallanRows). */
 export function employerLwfForRow(grossEarnings: number, company: CompanySettings): number {
   if (grossEarnings <= 0) return 0;
-  const lowSlab = grossEarnings <= company.lwfSlabWageLimit;
-  return lowSlab ? company.lwfLowEmployerAmt : company.lwfHighEmployerAmt;
+  return round2(Math.min(grossEarnings * (company.lwfEmployerRate / 100), company.lwfEmployerMaxAmt));
 }
 
 /** Establishment-level EPF admin charge for a batch of members — not divisible per employee. */
@@ -262,6 +262,10 @@ export function buildEsiFileCsv(rows: StatutoryEmployeeAgg[], company: CompanySe
 
   for (const row of rows) {
     if (row.esi <= 0) continue; // not on ESI this period
+    if (row.grossEarnings > company.esiWageCeiling) {
+      skipped.push({ employeeCode: row.employeeCode, name: row.name, reason: `Gross wages above ESI ceiling (₹${company.esiWageCeiling})` });
+      continue;
+    }
     if (!row.esiNo) {
       skipped.push({ employeeCode: row.employeeCode, name: row.name, reason: "No ESI number on file" });
       continue;
@@ -297,7 +301,7 @@ export function buildEsiFileCsv(rows: StatutoryEmployeeAgg[], company: CompanySe
 }
 
 // --------------------------------------------------------------------------
-// LWF — Labour Welfare Fund challan (two-slab, e.g. Maharashtra)
+// LWF — Labour Welfare Fund challan (% of gross wages, capped, e.g. Tamil Nadu)
 // --------------------------------------------------------------------------
 
 export interface LwfMemberLine {
@@ -318,16 +322,13 @@ export interface LwfChallanSummary {
 export function buildLwfChallanRows(rows: StatutoryEmployeeAgg[], company: CompanySettings): { lines: LwfMemberLine[]; summary: LwfChallanSummary } {
   const lines: LwfMemberLine[] = rows
     .filter((row) => row.grossEarnings > 0)
-    .map((row) => {
-      const lowSlab = row.grossEarnings <= company.lwfSlabWageLimit;
-      return {
-        employeeCode: row.employeeCode,
-        name: row.name,
-        grossWages: round2(row.grossEarnings),
-        employeeAmt: lowSlab ? company.lwfLowEmployeeAmt : company.lwfHighEmployeeAmt,
-        employerAmt: lowSlab ? company.lwfLowEmployerAmt : company.lwfHighEmployerAmt,
-      };
-    });
+    .map((row) => ({
+      employeeCode: row.employeeCode,
+      name: row.name,
+      grossWages: round2(row.grossEarnings),
+      employeeAmt: round2(Math.min(row.grossEarnings * (company.lwfEmployeeRate / 100), company.lwfEmployeeMaxAmt)),
+      employerAmt: round2(Math.min(row.grossEarnings * (company.lwfEmployerRate / 100), company.lwfEmployerMaxAmt)),
+    }));
 
   const totalEmployee = round2(lines.reduce((s, l) => s + l.employeeAmt, 0));
   const totalEmployer = round2(lines.reduce((s, l) => s + l.employerAmt, 0));

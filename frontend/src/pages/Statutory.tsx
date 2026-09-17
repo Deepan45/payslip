@@ -259,7 +259,7 @@ export function Statutory() {
           </ActionButton>
         </div>
         <p className="small">
-          LWF is typically remitted half-yearly (e.g. Maharashtra: June &amp; December cycles), not every month —
+          LWF is typically remitted half-yearly or annually depending on your state's cycle, not every month —
           only download this for whichever month your establishment's LWF contribution is actually due.
         </p>
         {!lwfRegistrationNo && (

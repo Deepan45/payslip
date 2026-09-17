@@ -29,7 +29,7 @@ companyRouter.put("/", requireAuth, requirePermission("settings.manage"), async 
     pfEstablishmentId, esicEmployerCode, lwfRegistrationNo,
     epfEmployerEpsRate, epfEmployerPfRate, epfEdliRate, epfAdminChargeRate, epfAdminChargeMin, epsWageCeiling,
     esiEmployerRate, esiWageCeiling,
-    lwfSlabWageLimit, lwfLowEmployeeAmt, lwfLowEmployerAmt, lwfHighEmployeeAmt, lwfHighEmployerAmt,
+    lwfEmployeeRate, lwfEmployeeMaxAmt, lwfEmployerRate, lwfEmployerMaxAmt,
     gstin, bankName, bankAccountNo, bankIfscCode, billingTerms,
   } = req.body as {
     name?: string;
@@ -49,11 +49,10 @@ companyRouter.put("/", requireAuth, requirePermission("settings.manage"), async 
     epsWageCeiling?: number;
     esiEmployerRate?: number;
     esiWageCeiling?: number;
-    lwfSlabWageLimit?: number;
-    lwfLowEmployeeAmt?: number;
-    lwfLowEmployerAmt?: number;
-    lwfHighEmployeeAmt?: number;
-    lwfHighEmployerAmt?: number;
+    lwfEmployeeRate?: number;
+    lwfEmployeeMaxAmt?: number;
+    lwfEmployerRate?: number;
+    lwfEmployerMaxAmt?: number;
     gstin?: string;
     bankName?: string;
     bankAccountNo?: string;
@@ -74,11 +73,10 @@ companyRouter.put("/", requireAuth, requirePermission("settings.manage"), async 
     ...(epsWageCeiling !== undefined && { epsWageCeiling }),
     ...(esiEmployerRate !== undefined && { esiEmployerRate }),
     ...(esiWageCeiling !== undefined && { esiWageCeiling }),
-    ...(lwfSlabWageLimit !== undefined && { lwfSlabWageLimit }),
-    ...(lwfLowEmployeeAmt !== undefined && { lwfLowEmployeeAmt }),
-    ...(lwfLowEmployerAmt !== undefined && { lwfLowEmployerAmt }),
-    ...(lwfHighEmployeeAmt !== undefined && { lwfHighEmployeeAmt }),
-    ...(lwfHighEmployerAmt !== undefined && { lwfHighEmployerAmt }),
+    ...(lwfEmployeeRate !== undefined && { lwfEmployeeRate }),
+    ...(lwfEmployeeMaxAmt !== undefined && { lwfEmployeeMaxAmt }),
+    ...(lwfEmployerRate !== undefined && { lwfEmployerRate }),
+    ...(lwfEmployerMaxAmt !== undefined && { lwfEmployerMaxAmt }),
   };
   const existing = await prisma.companySettings.findFirst();
   const company = existing

@@ -24,11 +24,10 @@ interface Company {
   epsWageCeiling: number;
   esiEmployerRate: number;
   esiWageCeiling: number;
-  lwfSlabWageLimit: number;
-  lwfLowEmployeeAmt: number;
-  lwfLowEmployerAmt: number;
-  lwfHighEmployeeAmt: number;
-  lwfHighEmployerAmt: number;
+  lwfEmployeeRate: number;
+  lwfEmployeeMaxAmt: number;
+  lwfEmployerRate: number;
+  lwfEmployerMaxAmt: number;
   gstin: string | null;
   bankName: string | null;
   bankAccountNo: string | null;
@@ -72,11 +71,10 @@ export function Settings() {
   const [epsWageCeiling, setEpsWageCeiling] = useState(15000);
   const [esiEmployerRate, setEsiEmployerRate] = useState(3.25);
   const [esiWageCeiling, setEsiWageCeiling] = useState(21000);
-  const [lwfSlabWageLimit, setLwfSlabWageLimit] = useState(3000);
-  const [lwfLowEmployeeAmt, setLwfLowEmployeeAmt] = useState(6);
-  const [lwfLowEmployerAmt, setLwfLowEmployerAmt] = useState(18);
-  const [lwfHighEmployeeAmt, setLwfHighEmployeeAmt] = useState(12);
-  const [lwfHighEmployerAmt, setLwfHighEmployerAmt] = useState(36);
+  const [lwfEmployeeRate, setLwfEmployeeRate] = useState(0.2);
+  const [lwfEmployeeMaxAmt, setLwfEmployeeMaxAmt] = useState(35);
+  const [lwfEmployerRate, setLwfEmployerRate] = useState(0.4);
+  const [lwfEmployerMaxAmt, setLwfEmployerMaxAmt] = useState(70);
 
   // Billing / invoice settings — printed on generated Client Bill PDFs (see the History page).
   // Informational only: GSTIN is shown but no GST is computed or added to a bill's total.
@@ -108,11 +106,10 @@ export function Settings() {
     setEpsWageCeiling(c.epsWageCeiling);
     setEsiEmployerRate(c.esiEmployerRate);
     setEsiWageCeiling(c.esiWageCeiling);
-    setLwfSlabWageLimit(c.lwfSlabWageLimit);
-    setLwfLowEmployeeAmt(c.lwfLowEmployeeAmt);
-    setLwfLowEmployerAmt(c.lwfLowEmployerAmt);
-    setLwfHighEmployeeAmt(c.lwfHighEmployeeAmt);
-    setLwfHighEmployerAmt(c.lwfHighEmployerAmt);
+    setLwfEmployeeRate(c.lwfEmployeeRate);
+    setLwfEmployeeMaxAmt(c.lwfEmployeeMaxAmt);
+    setLwfEmployerRate(c.lwfEmployerRate);
+    setLwfEmployerMaxAmt(c.lwfEmployerMaxAmt);
     setGstin(c.gstin ?? "");
     setBankName(c.bankName ?? "");
     setBankAccountNo(c.bankAccountNo ?? "");
@@ -138,7 +135,7 @@ export function Settings() {
         pfEstablishmentId, esicEmployerCode, lwfRegistrationNo,
         epfEmployerEpsRate, epfEmployerPfRate, epfEdliRate, epfAdminChargeRate, epfAdminChargeMin, epsWageCeiling,
         esiEmployerRate, esiWageCeiling,
-        lwfSlabWageLimit, lwfLowEmployeeAmt, lwfLowEmployerAmt, lwfHighEmployeeAmt, lwfHighEmployerAmt,
+        lwfEmployeeRate, lwfEmployeeMaxAmt, lwfEmployerRate, lwfEmployerMaxAmt,
         gstin, bankName, bankAccountNo, bankIfscCode, billingTerms,
       });
       applyCompany(res.data.company);
@@ -369,32 +366,31 @@ export function Settings() {
               <input type="number" step="1" value={esiWageCeiling} onChange={(e) => setEsiWageCeiling(parseFloat(e.target.value) || 0)} />
             </label>
           </div>
+          <p className="small" style={{ marginTop: -4, marginBottom: 0 }}>
+            Employees with gross wages above the ceiling are excluded from ESI filings, even if the uploaded sheet has an ESI amount for them.
+          </p>
 
           <p className="small" style={{ marginTop: 12, marginBottom: 4, fontWeight: 600 }}>
-            LWF slabs (two-slab, e.g. Maharashtra) — amount depends on whether gross wages are at/below the limit
+            LWF (% of gross wages, e.g. Tamil Nadu) — each side is capped at its max amount per period
           </p>
-          <label>
-            Slab wage limit (₹)
-            <input type="number" step="1" value={lwfSlabWageLimit} onChange={(e) => setLwfSlabWageLimit(parseFloat(e.target.value) || 0)} />
-          </label>
           <div className="form-row">
             <label>
-              Low slab — employee (₹)
-              <input type="number" step="0.01" value={lwfLowEmployeeAmt} onChange={(e) => setLwfLowEmployeeAmt(parseFloat(e.target.value) || 0)} />
+              Employee rate (%)
+              <input type="number" step="0.01" value={lwfEmployeeRate} onChange={(e) => setLwfEmployeeRate(parseFloat(e.target.value) || 0)} />
             </label>
             <label>
-              Low slab — employer (₹)
-              <input type="number" step="0.01" value={lwfLowEmployerAmt} onChange={(e) => setLwfLowEmployerAmt(parseFloat(e.target.value) || 0)} />
+              Employee max (₹)
+              <input type="number" step="0.01" value={lwfEmployeeMaxAmt} onChange={(e) => setLwfEmployeeMaxAmt(parseFloat(e.target.value) || 0)} />
             </label>
           </div>
           <div className="form-row">
             <label>
-              High slab — employee (₹)
-              <input type="number" step="0.01" value={lwfHighEmployeeAmt} onChange={(e) => setLwfHighEmployeeAmt(parseFloat(e.target.value) || 0)} />
+              Employer rate (%)
+              <input type="number" step="0.01" value={lwfEmployerRate} onChange={(e) => setLwfEmployerRate(parseFloat(e.target.value) || 0)} />
             </label>
             <label>
-              High slab — employer (₹)
-              <input type="number" step="0.01" value={lwfHighEmployerAmt} onChange={(e) => setLwfHighEmployerAmt(parseFloat(e.target.value) || 0)} />
+              Employer max (₹)
+              <input type="number" step="0.01" value={lwfEmployerMaxAmt} onChange={(e) => setLwfEmployerMaxAmt(parseFloat(e.target.value) || 0)} />
             </label>
           </div>
         </div>

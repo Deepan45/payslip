@@ -77,16 +77,16 @@ model CompanySettings {
   epsWageCeiling     Float @default(15000) // EPS + EDLI contribution wage cap per member
 
   esiEmployerRate  Float @default(3.25) // employer share, % of gross wages
-  esiWageCeiling   Float @default(21000) // gross wage ceiling for ESI applicability
+  esiWageCeiling   Float @default(21000) // gross wage ceiling for ESI applicability — employees above
+                                          // this are not covered, so no ESI (employee or employer) applies
 
-  // Maharashtra-style two-slab LWF: below/at the wage limit uses the "low"
-  // amounts, above it uses "high". Re-set these fields if a different
-  // state's LWF rules apply.
-  lwfSlabWageLimit   Float @default(3000)
-  lwfLowEmployeeAmt  Float @default(6)
-  lwfLowEmployerAmt  Float @default(18)
-  lwfHighEmployeeAmt Float @default(12)
-  lwfHighEmployerAmt Float @default(36)
+  // Tamil Nadu-style LWF: a percentage of gross wages, each side capped at a
+  // fixed max amount per period. Re-set these fields if a different state's
+  // LWF rules apply.
+  lwfEmployeeRate   Float @default(0.2)  // employee share, % of gross wages
+  lwfEmployeeMaxAmt Float @default(35)   // employee contribution cap (₹/period)
+  lwfEmployerRate   Float @default(0.4)  // employer share, % of gross wages
+  lwfEmployerMaxAmt Float @default(70)   // employer contribution cap (₹/period)
 
   // --- Billing / invoice info, printed on generated Client Bill PDFs
   // (see bill.service.ts / pdf.service.ts). Purely informational — GSTIN is
