@@ -79,10 +79,10 @@ statutoryRouter.get("/esi/file", async (req, res) => {
   res.send(csv);
 });
 
-// LWF — on-screen summary. Note: LWF (e.g. Maharashtra) is typically remitted
-// half-yearly, not every month — this computes the slab-based amount for
-// whichever single period is selected; only run it for a month your
-// establishment's LWF cycle is actually due for.
+// LWF — on-screen summary. Note: LWF is typically remitted half-yearly or
+// annually depending on the state, not every month — this computes the
+// percentage-based amount for whichever single period is selected; only run
+// it for a month your establishment's LWF cycle is actually due for.
 statutoryRouter.get("/lwf/summary", async (req, res) => {
   const period = parsePeriod(req);
   if (!period) return res.status(400).json({ error: "periodMonth and periodYear query params are required" });

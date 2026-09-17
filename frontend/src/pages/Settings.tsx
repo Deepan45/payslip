@@ -320,7 +320,7 @@ export function Settings() {
           </div>
           <label>
             LWF registration number
-            <input value={lwfRegistrationNo} onChange={(e) => setLwfRegistrationNo(e.target.value)} placeholder="e.g. Maharashtra LWF registration no." />
+            <input value={lwfRegistrationNo} onChange={(e) => setLwfRegistrationNo(e.target.value)} placeholder="Your state LWF registration no." />
           </label>
 
           <p className="small" style={{ marginTop: 12, marginBottom: 4, fontWeight: 600 }}>PF (EPF/EPS/EDLI) rates</p>
