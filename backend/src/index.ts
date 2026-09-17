@@ -15,6 +15,7 @@ import { publicRouter } from "./routes/public.routes";
 import { dashboardRouter } from "./routes/dashboard.routes";
 import { statutoryRouter } from "./routes/statutory.routes";
 import { userRouter } from "./routes/user.routes";
+import { backupRouter } from "./routes/backup.routes";
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use("/api/public", publicRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/statutory", statutoryRouter);
 app.use("/api/users", userRouter);
+app.use("/api/backup", backupRouter);
 
 // Centralized error handler (covers multer errors, unexpected throws, etc.)
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

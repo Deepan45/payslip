@@ -36,7 +36,7 @@ interface Company {
   billingTerms: string | null;
 }
 
-type SettingsTab = "profile" | "statutory" | "billing";
+type SettingsTab = "profile" | "statutory" | "billing" | "backup";
 
 export function Settings() {
   const { can } = useAuth();
@@ -85,6 +85,9 @@ export function Settings() {
   const [bankAccountNo, setBankAccountNo] = useState("");
   const [bankIfscCode, setBankIfscCode] = useState("");
   const [billingTerms, setBillingTerms] = useState("");
+
+  const [backingUp, setBackingUp] = useState(false);
+  const [backupError, setBackupError] = useState<string | null>(null);
 
   function applyCompany(c: Company) {
     setCompany(c);
@@ -158,6 +161,26 @@ export function Settings() {
     }
   }
 
+  async function handleDownloadBackup() {
+    setBackupError(null);
+    setBackingUp(true);
+    try {
+      const res = await api.get("/backup", { responseType: "blob" });
+      const blobUrl = URL.createObjectURL(res.data);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `payslip-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      setBackupError(apiErrorMessage(err, "Failed to generate backup"));
+    } finally {
+      setBackingUp(false);
+    }
+  }
+
   if (!canManage) {
     return (
       <div>
@@ -202,6 +225,14 @@ export function Settings() {
               </svg>
             </span>
             Billing &amp; Invoice
+          </button>
+          <button type="button" className={`settings-tab ${activeTab === "backup" ? "active" : ""}`} onClick={() => setActiveTab("backup")}>
+            <span className="section-title-icon stat-icon-blue">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              </svg>
+            </span>
+            Data Backup
           </button>
         </div>
 
@@ -415,7 +446,27 @@ export function Settings() {
           </label>
         </div>
 
-        <button type="submit" className="btn-primary" style={{ marginTop: 20 }} disabled={saving}>
+        <div className="card" style={{ maxWidth: 560, display: activeTab === "backup" ? undefined : "none" }}>
+          <div className="section-title" style={{ marginBottom: 16 }}>
+            <span className="section-title-icon stat-icon-blue">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              </svg>
+            </span>
+            <h2 style={{ margin: 0 }}>Data Backup</h2>
+          </div>
+          <p className="small" style={{ marginTop: -8, marginBottom: 16 }}>
+            Downloads a single .zip with every table in the database (clients, employees, salary records,
+            payslips, bills, users, settings) plus every stored file (logos, generated payslip/bill PDFs,
+            uploaded salary sheets). Keep the file somewhere safe — it contains all payroll and personal data.
+          </p>
+          {backupError && <div className="alert alert-error">{backupError}</div>}
+          <button type="button" className="btn-primary" onClick={handleDownloadBackup} disabled={backingUp}>
+            {backingUp ? "Preparing backup..." : "Download Backup"}
+          </button>
+        </div>
+
+        <button type="submit" className="btn-primary" style={{ marginTop: 20, display: activeTab === "backup" ? "none" : undefined }} disabled={saving}>
           {saving ? "Saving..." : "Save Settings"}
         </button>
       </form>
