@@ -5,6 +5,7 @@ import {
   aggregateEmployeesForPeriod,
   getCompanySettings,
   buildPfEcrText,
+  buildPfEcrSheetRows,
   buildEsiFileCsv,
   buildLwfChallanRows,
 } from "../services/statutory.service";
@@ -50,6 +51,29 @@ statutoryRouter.get("/pf/ecr-file", async (req, res) => {
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="PF-ECR-${label}.txt"`);
   res.send(text);
+});
+
+// PF — the same ECR data as an Excel working sheet ("AUG PF.xlsx" layout: no header row,
+// EE/EPS/ER contribution columns as live formulas), for review/adjustment before filing.
+statutoryRouter.get("/pf/ecr-xlsx", async (req, res) => {
+  const period = parsePeriod(req);
+  if (!period) return res.status(400).json({ error: "periodMonth and periodYear query params are required" });
+  const [rows, company] = await Promise.all([
+    aggregateEmployeesForPeriod(period.periodMonth, period.periodYear),
+    getCompanySettings(),
+  ]);
+  const { aoa } = buildPfEcrSheetRows(rows, company);
+
+  const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+  worksheet["!cols"] = [{ wch: 15 }, { wch: 28 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 8 }];
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+  const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+  const monthAbbr = MONTH_NAMES[period.periodMonth - 1].slice(0, 3).toUpperCase();
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${monthAbbr} PF.xlsx"`);
+  res.send(buffer);
 });
 
 // ESI — on-screen summary before downloading the contribution file.

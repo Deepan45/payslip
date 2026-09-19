@@ -14,6 +14,7 @@ import {
 import { generatePayslipPdf, generateClientBillPdf } from "../services/pdf.service";
 import { buildSalarySheetTemplate } from "../services/template.service";
 import { computeClientBillForSheet } from "../services/bill.service";
+import { pfWageForRow } from "../services/statutory.service";
 import { Prisma } from "@prisma/client";
 import { mapWithConcurrency } from "../utils/concurrency";
 
@@ -224,7 +225,9 @@ export async function uploadSalarySheet(req: AuthedRequest, res: Response) {
           incentive: row.incentive,
           otherEarnings: row.otherEarnings.length > 0 ? (row.otherEarnings as unknown as Prisma.InputJsonValue) : undefined,
           grossEarnings: row.grossEarnings,
-          pfSalaryAmt: row.pfSalaryAmt,
+          // Sheets with no PF wage column mapped come through as 0 even though EPF was deducted —
+          // store the derived wage so PF filings and client bills see it instead of a 0 base.
+          pfSalaryAmt: company ? pfWageForRow(row, company) : row.pfSalaryAmt,
           esi: row.esi,
           epf: row.epf,
           lwf: row.lwf,

@@ -169,13 +169,22 @@ export function Statutory() {
       <div className="card" style={{ maxWidth: 900, marginTop: 20 }}>
         <div className="toolbar" style={{ justifyContent: "space-between", marginBottom: 16 }}>
           <h2 style={{ margin: 0 }}>PF — EPFO ECR</h2>
-          <ActionButton
-            icon="download"
-            disabled={loading || !pf || pf.memberCount === 0 || downloading === "pf"}
-            onClick={() => handleDownload("pf", "/statutory/pf/ecr-file", `PF-ECR-${monthLabel}-${year}.txt`)}
-          >
-            {downloading === "pf" ? "Downloading..." : "Download ECR file"}
-          </ActionButton>
+          <div className="toolbar" style={{ gap: 8 }}>
+            <ActionButton
+              icon="download"
+              disabled={loading || !pf || pf.memberCount === 0 || downloading === "pf-xlsx"}
+              onClick={() => handleDownload("pf-xlsx", "/statutory/pf/ecr-xlsx", `${monthLabel.slice(0, 3).toUpperCase()} PF.xlsx`)}
+            >
+              {downloading === "pf-xlsx" ? "Downloading..." : "Download PF Excel"}
+            </ActionButton>
+            <ActionButton
+              icon="download"
+              disabled={loading || !pf || pf.memberCount === 0 || downloading === "pf"}
+              onClick={() => handleDownload("pf", "/statutory/pf/ecr-file", `PF-ECR-${monthLabel}-${year}.txt`)}
+            >
+              {downloading === "pf" ? "Downloading..." : "Download ECR file"}
+            </ActionButton>
+          </div>
         </div>
         {!pfEstablishmentId && (
           <div className="alert alert-error" style={{ marginBottom: 12 }}>

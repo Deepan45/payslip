@@ -19,6 +19,7 @@ export interface StatutoryEmployeeAgg {
   esiNo: string | null;
   paidDays: number;
   grossEarnings: number;
+  basic: number; // basic pay — the PF wage base fallback when a client's sheet has no PF wage column
   pfSalaryAmt: number; // PF-qualifying wage base
   epf: number; // employee-share EPF actually deducted on the sheet(s)
   esi: number; // employee-share ESI actually deducted on the sheet(s)
@@ -38,6 +39,7 @@ export async function aggregateEmployeesForPeriod(periodMonth: number, periodYea
     if (existing) {
       existing.paidDays += r.paidDays;
       existing.grossEarnings += r.grossEarnings;
+      existing.basic += r.basic;
       existing.pfSalaryAmt += r.pfSalaryAmt;
       existing.epf += r.epf;
       existing.esi += r.esi;
@@ -51,6 +53,7 @@ export async function aggregateEmployeesForPeriod(periodMonth: number, periodYea
         esiNo: r.employee.esiNo,
         paidDays: r.paidDays,
         grossEarnings: r.grossEarnings,
+        basic: r.basic,
         pfSalaryAmt: r.pfSalaryAmt,
         epf: r.epf,
         esi: r.esi,
@@ -70,6 +73,9 @@ export async function getCompanySettings(): Promise<CompanySettings> {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Excel ROUND(x, 0): half rounds away from zero, with a tiny nudge so binary-float values like 1249.4999999 don't flip. */
+const excelRound = (n: number) => Math.round(n + 1e-9);
 
 // --------------------------------------------------------------------------
 // Shared per-employee employer-contribution math — used by the PF/ESI/LWF
@@ -146,6 +152,18 @@ export interface PfChallanSummary {
   grandTotal: number;
 }
 
+/** PF-qualifying wage for one employee. Some clients' sheets have no PF wage column mapped, so
+ * `pfSalaryAmt` is 0 even though EPF was deducted — in that case fall back to basic pay capped at
+ * the wage ceiling (the standard EPF wage definition), rather than filing 0 wages against a
+ * non-zero contribution. */
+export function pfWageForRow(row: Pick<StatutoryEmployeeAgg, "pfSalaryAmt" | "basic" | "epf">, company: CompanySettings): number {
+  if (row.pfSalaryAmt > 0) return row.pfSalaryAmt;
+  if (row.epf > 0) return Math.min(row.basic, company.epsWageCeiling);
+  return 0;
+}
+
+const EMPLOYEE_EPF_RATE = 12; // employee EPF share is fixed by statute; only the employer split is configurable
+
 function buildPfLines(rows: StatutoryEmployeeAgg[], company: CompanySettings) {
   const lines: PfMemberLine[] = [];
   const skipped: PfChallanSummary["skipped"] = [];
@@ -156,12 +174,16 @@ function buildPfLines(rows: StatutoryEmployeeAgg[], company: CompanySettings) {
       skipped.push({ employeeCode: row.employeeCode, name: row.name, reason: "No UAN on file" });
       continue;
     }
-    const epfWages = round2(row.pfSalaryAmt);
-    const epsWages = round2(Math.min(row.pfSalaryAmt, company.epsWageCeiling));
-    const edliWages = round2(Math.min(row.pfSalaryAmt, company.epsWageCeiling));
-    const employerTotal = epfWages * (company.epfEmployerTotalRate / 100);
-    const epsContriEmployer = round2(epsWages * (company.epfEmployerEpsRate / 100));
-    const epfContriEmployerDiff = round2(employerTotal - epsContriEmployer);
+    const pfWage = pfWageForRow(row, company);
+    const epfWages = round2(pfWage);
+    const epsWages = round2(Math.min(pfWage, company.epsWageCeiling));
+    const edliWages = round2(Math.min(pfWage, company.epsWageCeiling));
+    // Whole-rupee contributions computed from wages (as the ECR requires), not the amount the
+    // client's sheet happened to deduct — so the file is internally consistent even if a sheet's
+    // own EPF column was rounded differently or computed on another base.
+    const epfContriEmployee = excelRound(epfWages * (EMPLOYEE_EPF_RATE / 100));
+    const epsContriEmployer = excelRound(epsWages * (company.epfEmployerEpsRate / 100));
+    const epfContriEmployerDiff = excelRound(epfWages * (company.epfEmployerTotalRate / 100)) - epsContriEmployer;
 
     lines.push({
       uan: row.uanNo,
@@ -170,7 +192,7 @@ function buildPfLines(rows: StatutoryEmployeeAgg[], company: CompanySettings) {
       epfWages,
       epsWages,
       edliWages,
-      epfContriEmployee: round2(row.epf),
+      epfContriEmployee,
       epsContriEmployer,
       epfContriEmployerDiff,
       ncpDays: 0, // not tracked on the sheet — assumed full month; adjust manually if a member had NCP days
@@ -231,6 +253,68 @@ export function buildPfEcrText(rows: StatutoryEmployeeAgg[], company: CompanySet
       totalEdli,
       totalAdminCharge,
       grandTotal,
+    },
+  };
+}
+
+/**
+ * PF ECR as an Excel sheet (no header row), same layout as the monthly "<MON> PF.xlsx" working file:
+ * A UAN | B Name | C Gross | D EPF wages | E EPS wages | F EDLI wages | G EE EPF | H EPS | I ER EPF diff | J NCP days | K Refund.
+ * G/H/I are live formulas so the sheet stays editable (e.g. adjust a wage and the contributions follow);
+ * each formula cell also carries its computed value so viewers that don't recalculate still show numbers.
+ * EPS is rounded to whole rupees and the ER diff is the rounded EPF total minus EPS, so EPS + diff always
+ * equals the rounded EPF total instead of drifting by a rupee.
+ */
+export function buildPfEcrSheetRows(rows: StatutoryEmployeeAgg[], company: CompanySettings): {
+  aoa: (string | number | { t: "n"; v: number; f: string })[][];
+  summary: PfChallanSummary;
+} {
+  const { lines, skipped } = buildPfLines(rows, company);
+  const epfRate = EMPLOYEE_EPF_RATE;
+  const totalRate = company.epfEmployerTotalRate;
+  const epsRate = company.epfEmployerEpsRate;
+
+  const aoa: (string | number | { t: "n"; v: number; f: string })[][] = [];
+  let totalEpfWages = 0, totalEpsWages = 0, totalEdliWages = 0, totalEe = 0, totalEps = 0, totalDiff = 0;
+
+  lines.forEach((l, i) => {
+    const r = i + 1; // Excel row number — no header row
+    const ee = l.epfContriEmployee;
+    const eps = l.epsContriEmployer;
+    const diff = l.epfContriEmployerDiff;
+    totalEpfWages += l.epfWages; totalEpsWages += l.epsWages; totalEdliWages += l.edliWages;
+    totalEe += ee; totalEps += eps; totalDiff += diff;
+    aoa.push([
+      /^\d+$/.test(l.uan) ? Number(l.uan) : l.uan,
+      l.name,
+      l.grossWages,
+      l.epfWages,
+      l.epsWages,
+      l.edliWages,
+      { t: "n", v: ee, f: `ROUND(D${r}*${epfRate}%,0)` },
+      { t: "n", v: eps, f: `ROUND(E${r}*${epsRate}%,0)` },
+      { t: "n", v: diff, f: `ROUND(D${r}*${totalRate}%,0)-H${r}` },
+      l.ncpDays,
+      l.refundAdvances,
+    ]);
+  });
+
+  const totalEdli = round2(totalEdliWages * (company.epfEdliRate / 100));
+  const totalAdminCharge = pfAdminChargeForBatch(totalEpfWages, lines.length, company);
+  return {
+    aoa,
+    summary: {
+      memberCount: lines.length,
+      skipped,
+      totalEpfWages: round2(totalEpfWages),
+      totalEpsWages: round2(totalEpsWages),
+      totalEdliWages: round2(totalEdliWages),
+      totalEmployeeEpf: totalEe,
+      totalEmployerEps: totalEps,
+      totalEmployerEpfDiff: totalDiff,
+      totalEdli,
+      totalAdminCharge,
+      grandTotal: round2(totalEe + totalEps + totalDiff + totalEdli + totalAdminCharge),
     },
   };
 }
