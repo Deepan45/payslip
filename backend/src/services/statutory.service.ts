@@ -17,6 +17,8 @@ export interface StatutoryEmployeeAgg {
   name: string;
   uanNo: string | null;
   esiNo: string | null;
+  pfEpsExempt: boolean;
+  pfExcludeFromEcr: boolean;
   paidDays: number;
   grossEarnings: number;
   basic: number; // basic pay — the PF wage base fallback when a client's sheet has no PF wage column
@@ -51,6 +53,8 @@ export async function aggregateEmployeesForPeriod(periodMonth: number, periodYea
         name: r.employee.name,
         uanNo: r.employee.uanNo,
         esiNo: r.employee.esiNo,
+        pfEpsExempt: r.employee.pfEpsExempt,
+        pfExcludeFromEcr: r.employee.pfExcludeFromEcr,
         paidDays: r.paidDays,
         grossEarnings: r.grossEarnings,
         basic: r.basic,
@@ -141,6 +145,7 @@ export interface PfMemberLine {
 export interface PfChallanSummary {
   memberCount: number;
   skipped: { employeeCode: string; name: string; reason: string }[];
+  excluded: { employeeCode: string; name: string }[]; // deliberately left out via the employee's "exclude from ECR" flag
   totalEpfWages: number;
   totalEpsWages: number;
   totalEdliWages: number;
@@ -167,20 +172,26 @@ const EMPLOYEE_EPF_RATE = 12; // employee EPF share is fixed by statute; only th
 function buildPfLines(rows: StatutoryEmployeeAgg[], company: CompanySettings) {
   const lines: PfMemberLine[] = [];
   const skipped: PfChallanSummary["skipped"] = [];
+  const excluded: PfChallanSummary["excluded"] = [];
 
   for (const row of rows) {
     if (row.pfSalaryAmt <= 0 && row.epf <= 0) continue; // not on PF this period
+    if (row.pfExcludeFromEcr) {
+      excluded.push({ employeeCode: row.employeeCode, name: row.name });
+      continue;
+    }
     if (!row.uanNo) {
       skipped.push({ employeeCode: row.employeeCode, name: row.name, reason: "No UAN on file" });
       continue;
     }
     const pfWage = pfWageForRow(row, company);
-    const epfWages = round2(pfWage);
-    const epsWages = round2(Math.min(pfWage, company.epsWageCeiling));
-    const edliWages = round2(Math.min(pfWage, company.epsWageCeiling));
-    // Whole-rupee contributions computed from wages (as the ECR requires), not the amount the
-    // client's sheet happened to deduct — so the file is internally consistent even if a sheet's
-    // own EPF column was rounded differently or computed on another base.
+    // The ECR carries whole rupees only, and the portal checks contributions against the wages as
+    // uploaded — so round the wages first and derive every contribution from those integers (not
+    // from the amount the client's sheet deducted, which may be rounded or based differently).
+    const epfWages = excelRound(pfWage);
+    const wageCeiling = excelRound(company.epsWageCeiling);
+    const edliWages = Math.min(epfWages, wageCeiling); // EDLI applies to every member, EPS-exempt or not
+    const epsWages = row.pfEpsExempt ? 0 : edliWages;
     const epfContriEmployee = excelRound(epfWages * (EMPLOYEE_EPF_RATE / 100));
     const epsContriEmployer = excelRound(epsWages * (company.epfEmployerEpsRate / 100));
     const epfContriEmployerDiff = excelRound(epfWages * (company.epfEmployerTotalRate / 100)) - epsContriEmployer;
@@ -188,7 +199,7 @@ function buildPfLines(rows: StatutoryEmployeeAgg[], company: CompanySettings) {
     lines.push({
       uan: row.uanNo,
       name: row.name,
-      grossWages: round2(row.grossEarnings),
+      grossWages: excelRound(row.grossEarnings),
       epfWages,
       epsWages,
       edliWages,
@@ -200,30 +211,41 @@ function buildPfLines(rows: StatutoryEmployeeAgg[], company: CompanySettings) {
     });
   }
 
-  return { lines, skipped };
+  return { lines, skipped, excluded };
+}
+
+/** The 11 ECR fields for one member, in EPFO order, as whole numbers, exactly as the portal upload file carries them. */
+function pfLineFields(l: PfMemberLine): (string | number)[] {
+  return [
+    l.uan,
+    l.name,
+    l.grossWages,
+    l.epfWages,
+    l.epsWages,
+    l.edliWages,
+    l.epfContriEmployee,
+    l.epsContriEmployer,
+    l.epfContriEmployerDiff,
+    l.ncpDays,
+    l.refundAdvances,
+  ];
+}
+
+/** Same ECR rows as the .txt file, comma-separated with no header row. Names containing commas or quotes are quoted. */
+export function buildPfEcrCsv(rows: StatutoryEmployeeAgg[], company: CompanySettings): string {
+  const { lines } = buildPfLines(rows, company);
+  const cell = (v: string | number) => {
+    const t = String(v);
+    return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  return lines.map((l) => pfLineFields(l).map(cell).join(",")).join("\r\n");
 }
 
 /** EPFO ECR text file content: one member per line, fields separated by "#~#". */
 export function buildPfEcrText(rows: StatutoryEmployeeAgg[], company: CompanySettings): { text: string; summary: PfChallanSummary } {
-  const { lines, skipped } = buildPfLines(rows, company);
+  const { lines, skipped, excluded } = buildPfLines(rows, company);
 
-  const text = lines
-    .map((l) =>
-      [
-        l.uan,
-        l.name,
-        l.grossWages.toFixed(2),
-        l.epfWages.toFixed(2),
-        l.epsWages.toFixed(2),
-        l.edliWages.toFixed(2),
-        l.epfContriEmployee.toFixed(2),
-        l.epsContriEmployer.toFixed(2),
-        l.epfContriEmployerDiff.toFixed(2),
-        l.ncpDays,
-        l.refundAdvances.toFixed(2),
-      ].join("#~#")
-    )
-    .join("\r\n");
+  const text = lines.map((l) => pfLineFields(l).join("#~#")).join("\r\n");
 
   const totalEpfWages = round2(lines.reduce((s, l) => s + l.epfWages, 0));
   const totalEpsWages = round2(lines.reduce((s, l) => s + l.epsWages, 0));
@@ -244,6 +266,7 @@ export function buildPfEcrText(rows: StatutoryEmployeeAgg[], company: CompanySet
     summary: {
       memberCount: lines.length,
       skipped,
+      excluded,
       totalEpfWages,
       totalEpsWages,
       totalEdliWages,
@@ -269,7 +292,7 @@ export function buildPfEcrSheetRows(rows: StatutoryEmployeeAgg[], company: Compa
   aoa: (string | number | { t: "n"; v: number; f: string })[][];
   summary: PfChallanSummary;
 } {
-  const { lines, skipped } = buildPfLines(rows, company);
+  const { lines, skipped, excluded } = buildPfLines(rows, company);
   const epfRate = EMPLOYEE_EPF_RATE;
   const totalRate = company.epfEmployerTotalRate;
   const epsRate = company.epfEmployerEpsRate;
@@ -306,6 +329,7 @@ export function buildPfEcrSheetRows(rows: StatutoryEmployeeAgg[], company: Compa
     summary: {
       memberCount: lines.length,
       skipped,
+      excluded,
       totalEpfWages: round2(totalEpfWages),
       totalEpsWages: round2(totalEpsWages),
       totalEdliWages: round2(totalEdliWages),

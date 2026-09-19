@@ -35,6 +35,8 @@ interface EmployeeDetail {
   dateOfRelieving: string | null;
   qualification: string | null;
   domicileOfHaryana: boolean | null;
+  pfEpsExempt: boolean;
+  pfExcludeFromEcr: boolean;
   designation: string | null;
   department: string | null;
   bankAccount: string | null;
@@ -67,6 +69,8 @@ export function EmployeeDetail() {
   const [dateOfRelieving, setDateOfRelieving] = useState("");
   const [qualification, setQualification] = useState("");
   const [domicileOfHaryana, setDomicileOfHaryana] = useState("");
+  const [pfEpsExempt, setPfEpsExempt] = useState(false);
+  const [pfExcludeFromEcr, setPfExcludeFromEcr] = useState(false);
   const [guardianName, setGuardianName] = useState("");
   const [designation, setDesignation] = useState("");
   const [department, setDepartment] = useState("");
@@ -99,6 +103,8 @@ export function EmployeeDetail() {
         setDomicileOfHaryana(
           res.data.employee.domicileOfHaryana === true ? "yes" : res.data.employee.domicileOfHaryana === false ? "no" : ""
         );
+        setPfEpsExempt(res.data.employee.pfEpsExempt ?? false);
+        setPfExcludeFromEcr(res.data.employee.pfExcludeFromEcr ?? false);
         setGuardianName(res.data.employee.guardianName ?? "");
         setDesignation(res.data.employee.designation ?? "");
         setDepartment(res.data.employee.department ?? "");
@@ -125,6 +131,7 @@ export function EmployeeDetail() {
         epfNo, dateOfJoining, dateOfRelieving, qualification,
         domicileOfHaryana: domicileOfHaryana === "yes" ? true : domicileOfHaryana === "no" ? false : null,
         guardianName, designation, department, bankAccount, ifscCode, uanNo, esiNo,
+        pfEpsExempt, pfExcludeFromEcr,
       });
       setEditing(false);
       load();
@@ -248,6 +255,14 @@ export function EmployeeDetail() {
           <div>
             <strong>Domicile of Haryana</strong>
             <div>{employee.domicileOfHaryana === true ? "Yes" : employee.domicileOfHaryana === false ? "No" : "-"}</div>
+          </div>
+          <div>
+            <strong>PF EPS exempt</strong>
+            <div>{employee.pfEpsExempt ? "Yes" : "No"}</div>
+          </div>
+          <div>
+            <strong>Exclude from PF ECR</strong>
+            <div>{employee.pfExcludeFromEcr ? "Yes" : "No"}</div>
           </div>
           <div>
             <strong>Designation</strong>
@@ -391,6 +406,14 @@ export function EmployeeDetail() {
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
               </select>
+            </label>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontWeight: 500 }}>
+              <input type="checkbox" checked={pfEpsExempt} onChange={(e) => setPfEpsExempt(e.target.checked)} style={{ width: "auto", display: "inline-block", margin: "2px 0 0", padding: 0 }} />
+              PF EPS exempt (no pension contribution, e.g. age 58+) — ECR files EPS wage 0 and the full 12% as employer EPF
+            </label>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontWeight: 500 }}>
+              <input type="checkbox" checked={pfExcludeFromEcr} onChange={(e) => setPfExcludeFromEcr(e.target.checked)} style={{ width: "auto", display: "inline-block", margin: "2px 0 0", padding: 0 }} />
+              Exclude from PF ECR (e.g. UAN not yet linked to this establishment) — left out of the PF Excel, CSV and portal file
             </label>
             <button type="submit" className="btn-primary" disabled={saving}>
               {saving ? "Saving..." : "Save"}

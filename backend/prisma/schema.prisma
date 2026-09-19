@@ -163,6 +163,9 @@ model Employee {
   phone              String? // for WhatsApp / SMS payslip delivery
   currentClient      Client?        @relation(fields: [currentClientId], references: [id])
   currentClientId    String?
+  pfEpsExempt        Boolean        @default(false) // no EPS contribution (e.g. member aged 58+): the ECR files EPS wage 0 and the
+                                                    // whole 12% as employer EPF instead of the 8.33% / 3.67% split
+  pfExcludeFromEcr   Boolean        @default(false) // left out of the PF ECR / Excel / CSV (e.g. UAN not yet linked to this establishment)
   portalPasswordHash String? // set once self-service portal access is enabled for this employee
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt

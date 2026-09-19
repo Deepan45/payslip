@@ -20,6 +20,7 @@ interface Skipped {
 interface PfSummary {
   memberCount: number;
   skipped: Skipped[];
+  excluded: { employeeCode: string; name: string }[];
   totalEpfWages: number;
   totalEpsWages: number;
   totalEdliWages: number;
@@ -169,20 +170,27 @@ export function Statutory() {
       <div className="card" style={{ maxWidth: 900, marginTop: 20 }}>
         <div className="toolbar" style={{ justifyContent: "space-between", marginBottom: 16 }}>
           <h2 style={{ margin: 0 }}>PF — EPFO ECR</h2>
-          <div className="toolbar" style={{ gap: 8 }}>
+          <div className="toolbar" style={{ gap: 8, flexWrap: "wrap" }}>
             <ActionButton
               icon="download"
               disabled={loading || !pf || pf.memberCount === 0 || downloading === "pf-xlsx"}
               onClick={() => handleDownload("pf-xlsx", "/statutory/pf/ecr-xlsx", `${monthLabel.slice(0, 3).toUpperCase()} PF.xlsx`)}
             >
-              {downloading === "pf-xlsx" ? "Downloading..." : "Download PF Excel"}
+              {downloading === "pf-xlsx" ? "Downloading..." : "Excel"}
+            </ActionButton>
+            <ActionButton
+              icon="download"
+              disabled={loading || !pf || pf.memberCount === 0 || downloading === "pf-csv"}
+              onClick={() => handleDownload("pf-csv", "/statutory/pf/ecr-csv", `${monthLabel.slice(0, 3).toUpperCase()} PF.csv`)}
+            >
+              {downloading === "pf-csv" ? "Downloading..." : "CSV"}
             </ActionButton>
             <ActionButton
               icon="download"
               disabled={loading || !pf || pf.memberCount === 0 || downloading === "pf"}
               onClick={() => handleDownload("pf", "/statutory/pf/ecr-file", `PF-ECR-${monthLabel}-${year}.txt`)}
             >
-              {downloading === "pf" ? "Downloading..." : "Download ECR file"}
+              {downloading === "pf" ? "Downloading..." : "Portal upload (ECR .txt)"}
             </ActionButton>
           </div>
         </div>
@@ -212,6 +220,11 @@ export function Statutory() {
               <div className="alert alert-error" style={{ marginTop: 12 }}>
                 {pf.skipped.length} employee(s) skipped — missing UAN: {pf.skipped.map((s) => `${s.name} (${s.employeeCode})`).join(", ")}
               </div>
+            )}
+            {pf.excluded.length > 0 && (
+              <p className="small" style={{ marginTop: 12 }}>
+                {pf.excluded.length} employee(s) excluded by their "Exclude from PF ECR" setting: {pf.excluded.map((s) => `${s.name} (${s.employeeCode})`).join(", ")}
+              </p>
             )}
           </>
         )}

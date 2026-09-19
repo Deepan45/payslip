@@ -6,6 +6,7 @@ import {
   getCompanySettings,
   buildPfEcrText,
   buildPfEcrSheetRows,
+  buildPfEcrCsv,
   buildEsiFileCsv,
   buildLwfChallanRows,
 } from "../services/statutory.service";
@@ -74,6 +75,20 @@ statutoryRouter.get("/pf/ecr-xlsx", async (req, res) => {
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   res.setHeader("Content-Disposition", `attachment; filename="${monthAbbr} PF.xlsx"`);
   res.send(buffer);
+});
+
+// PF — the ECR rows as a plain CSV (same fields/values as the .txt portal file, comma-separated, no header).
+statutoryRouter.get("/pf/ecr-csv", async (req, res) => {
+  const period = parsePeriod(req);
+  if (!period) return res.status(400).json({ error: "periodMonth and periodYear query params are required" });
+  const [rows, company] = await Promise.all([
+    aggregateEmployeesForPeriod(period.periodMonth, period.periodYear),
+    getCompanySettings(),
+  ]);
+  const monthAbbr = MONTH_NAMES[period.periodMonth - 1].slice(0, 3).toUpperCase();
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${monthAbbr} PF.csv"`);
+  res.send(buildPfEcrCsv(rows, company));
 });
 
 // ESI — on-screen summary before downloading the contribution file.

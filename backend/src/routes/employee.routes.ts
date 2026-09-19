@@ -37,6 +37,7 @@ employeeRouter.put("/:id", requireAuth, requirePermission("employees.manage"), a
     email, phone, dob, aadhaarNo,
     isIndianNational, passportNo, epfNo, dateOfJoining, dateOfRelieving, qualification, domicileOfHaryana,
     guardianName, designation, department, bankAccount, ifscCode, uanNo, esiNo,
+    pfEpsExempt, pfExcludeFromEcr,
   } = req.body as {
     email?: string;
     phone?: string;
@@ -56,6 +57,8 @@ employeeRouter.put("/:id", requireAuth, requirePermission("employees.manage"), a
     ifscCode?: string;
     uanNo?: string;
     esiNo?: string;
+    pfEpsExempt?: boolean;
+    pfExcludeFromEcr?: boolean;
   };
 
   if (aadhaarNo && !/^\d{12}$/.test(aadhaarNo)) {
@@ -86,6 +89,8 @@ employeeRouter.put("/:id", requireAuth, requirePermission("employees.manage"), a
         ifscCode,
         uanNo,
         esiNo,
+        pfEpsExempt,
+        pfExcludeFromEcr,
       },
     });
     res.json({ employee });
