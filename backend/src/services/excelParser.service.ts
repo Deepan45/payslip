@@ -238,6 +238,15 @@ function lookupAlias(text: string): AliasMatch | undefined {
   return best ? { field: best, confidence: "fuzzy" } : undefined;
 }
 
+/** 0-based column index → Excel column letter (0 → A, 26 → AA). */
+export function columnLetter(index: number): string {
+  let s = "";
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) {
+    s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+  }
+  return s;
+}
+
 function cellText(row: unknown[] | undefined, index: number): string {
   if (!row) return "";
   const v = row[index];
@@ -583,10 +592,16 @@ export function parseWithMapping(grid: unknown[][], mapping: ColumnMapping): Par
     const employeeCode = (textOf("employeeCode", row) ?? "").trim();
     const name = (textOf("name", row) ?? "").trim();
     if (!employeeCode || !name) {
-      // Skip fully blank trailing rows silently; report genuinely partial rows.
-      const hasAnyData = row.some((c) => String(c ?? "").trim() !== "");
-      if (hasAnyData) {
-        errors.push({ rowNumber, message: "Missing Employee Code or Name — row skipped" });
+      // Skip rows with neither code nor name silently — blank trailing rows and
+      // totals rows (numbers only, no identity). Report genuinely partial rows,
+      // i.e. an employee with one of code/name missing.
+      if (employeeCode || name) {
+        const missing = employeeCode ? "name" : "employeeCode";
+        const label = missing === "name" ? "Name" : "Employee Code";
+        const ref = mapping.columns[missing]?.[0];
+        const where = ref ? ` (column ${columnLetter(ref.index)})` : " (column not mapped)";
+        const who = employeeCode ? `code ${employeeCode}` : name;
+        errors.push({ rowNumber, message: `${label} is empty for ${who}${where} — row skipped` });
       }
       continue;
     }

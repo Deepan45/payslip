@@ -145,7 +145,13 @@ export async function uploadSalarySheet(req: AuthedRequest, res: Response) {
   const grid = readSheetGrid(file.buffer);
   const { rows, errors } = parseWithMapping(grid, mapping);
   if (rows.length === 0) {
-    return res.status(400).json({ error: "No valid rows found in the sheet.", rowErrors: errors });
+    // The UI shows only `error`, so spell out why each row was rejected there.
+    const reasons = errors.slice(0, 5).map((e) => `Row ${e.rowNumber}: ${e.message}`);
+    if (errors.length > 5) reasons.push(`…and ${errors.length - 5} more`);
+    const error = reasons.length
+      ? `Nothing was imported — every employee row needs both an Employee Code and a Name. ${reasons.join("; ")}. Fill these in and upload again.`
+      : "Nothing was imported — no employee rows were found below the header. Check that the data start row is correct.";
+    return res.status(400).json({ error, rowErrors: errors });
   }
 
   const company = await prisma.companySettings.findFirst();
