@@ -12,6 +12,7 @@ import {
   ColumnMapping,
 } from "../services/excelParser.service";
 import { generatePayslipPdf, generateClientBillPdf } from "../services/pdf.service";
+import { payslipPdfData, resolveLogoPath } from "../services/payslipData.service";
 import { buildSalarySheetTemplate } from "../services/template.service";
 import { computeClientBillForSheet } from "../services/bill.service";
 import { pfWageForRow } from "../services/statutory.service";
@@ -26,22 +27,8 @@ import { mapWithConcurrency } from "../utils/concurrency";
 const UPLOAD_CONCURRENCY = 20;
 
 const PAYSLIP_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "payslips");
-const LOGO_DIR = path.join(__dirname, "..", "..", "storage", "logo");
 const SALARY_SHEET_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "salary-sheets");
 const BILL_STORAGE_DIR = path.join(__dirname, "..", "..", "storage", "bills");
-
-// CompanySettings.logoPath was historically stored as the full absolute path
-// returned by multer at upload time (see company.routes.ts) — which bakes in
-// whatever environment wrote it (e.g. a container's "/app/storage/logo/...").
-// Read back through a *different* environment (a local dev box against the
-// same shared DB, a restored backup, etc.), that path doesn't exist on disk
-// and the logo silently disappears from every payslip. Resolve by filename
-// against this environment's own LOGO_DIR instead, so only the file itself
-// needs to exist locally — not the exact path it was uploaded from.
-function resolveLogoPath(storedPath: string | null | undefined): string | undefined {
-  if (!storedPath) return undefined;
-  return path.join(LOGO_DIR, path.basename(storedPath));
-}
 
 export function downloadSalarySheetTemplate(_req: AuthedRequest, res: Response) {
   const buffer = buildSalarySheetTemplate();
@@ -262,50 +249,7 @@ export async function uploadSalarySheet(req: AuthedRequest, res: Response) {
       const pdfOutputPath = path.join(PAYSLIP_STORAGE_DIR, sheet.id, pdfFileName);
 
       await generatePayslipPdf(
-        {
-          company: {
-            name: company?.name ?? "Your Company",
-            address: company?.address,
-            logoPath: resolveLogoPath(company?.logoPath),
-            mobile: company?.mobile,
-            officePhone: company?.officePhone,
-            email: company?.email,
-            website: company?.website,
-          },
-          client: { name: client.name },
-          employee: {
-            employeeCode: employee.employeeCode,
-            name: employee.name,
-            guardianName: employee.guardianName,
-            designation: employee.designation,
-            department: employee.department,
-            bankAccount: employee.bankAccount,
-            ifscCode: employee.ifscCode,
-            uanNo: employee.uanNo,
-            esiNo: employee.esiNo,
-          },
-          period: { month, year },
-          attendance: { paidDays: row.paidDays, otHours: row.otHours, otAmount: row.otAmount },
-          earnings: {
-            basic: row.basic,
-            monthlySalary: row.monthlySalary,
-            hra: row.hra,
-            monthlyHra: row.monthlyHra,
-            otAmount: row.otAmount,
-            otherEarnings: row.otherEarnings,
-            grossEarnings: row.grossEarnings,
-          },
-          deductions: {
-            esi: row.esi,
-            epf: row.epf,
-            lwf: row.lwf,
-            advance: row.advance,
-            dressShoes: row.dressShoes,
-            otherDeduction: row.otherDeduction,
-            totalDeductions: row.totalDeductions,
-          },
-          netPay: row.netPay,
-        },
+        payslipPdfData(company, client.name, employee, salaryRecord, { month, year }),
         pdfOutputPath
       );
 

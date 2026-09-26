@@ -101,6 +101,10 @@ model CompanySettings {
   bankIfscCode   String?
   billingTerms   String? // free-text payment terms/notes, e.g. "Payment due within 15 days of invoice date"
 
+  // Default slips per A4 page (1, 2 or 3) for the combined "Print Payslips" PDF. Only affects
+  // printing — the individual payslip PDFs sent on WhatsApp/email are always full-page.
+  payslipsPerPage Int @default(3)
+
   updatedAt DateTime @updatedAt
 }
 

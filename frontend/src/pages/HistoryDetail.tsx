@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { api, apiErrorMessage } from "../api/client";
-import { downloadPayslip, downloadAllPayslipsForSheet, downloadSalarySheetSource, downloadClientBill } from "../api/payslip";
+import { downloadPayslip, downloadAllPayslipsForSheet, downloadSalarySheetSource, downloadClientBill, printPayslipsForSheet } from "../api/payslip";
 import { Pagination } from "../components/Pagination";
 import { PayslipPreviewModal } from "../components/PayslipPreviewModal";
 import { ActionButton } from "../components/ActionButton";
@@ -58,6 +58,9 @@ export function HistoryDetail() {
   const [sheet, setSheet] = useState<SheetDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  // 0 = use the default from Settings.
+  const [perPage, setPerPage] = useState<0 | 1 | 2 | 3>(0);
   const [sourceDownloading, setSourceDownloading] = useState(false);
   const [billDownloading, setBillDownloading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -87,6 +90,19 @@ export function HistoryDetail() {
       await downloadAllPayslipsForSheet(sheetId);
     } finally {
       setBulkLoading(false);
+    }
+  }
+
+  async function handlePrint() {
+    if (!sheetId) return;
+    setError(null);
+    setPrinting(true);
+    try {
+      await printPayslipsForSheet(sheetId, perPage || undefined, selected.size > 0 ? Array.from(selected) : undefined);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Failed to build the print PDF"));
+    } finally {
+      setPrinting(false);
     }
   }
 
@@ -244,6 +260,20 @@ export function HistoryDetail() {
             <button className="btn-primary" onClick={handleBulkDownload} disabled={bulkLoading}>
               {bulkLoading ? "Preparing zip..." : "Download All (.zip)"}
             </button>
+            <select
+              value={perPage}
+              onChange={(e) => setPerPage(Number(e.target.value) as 0 | 1 | 2 | 3)}
+              title="Payslips per A4 page"
+              style={{ width: "auto", margin: 0 }}
+            >
+              <option value={0}>Default layout</option>
+              <option value={3}>3 per page</option>
+              <option value={2}>2 per page</option>
+              <option value={1}>1 per page</option>
+            </select>
+            <ActionButton icon="print" disabled={printing} onClick={handlePrint}>
+              {printing ? "Preparing..." : selected.size > 0 ? `Print ${selected.size} Selected` : "Print Payslips"}
+            </ActionButton>
             <ActionButton
               icon="download"
               disabled={!sheet.filePath || sourceDownloading}

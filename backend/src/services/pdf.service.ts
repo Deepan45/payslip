@@ -140,282 +140,551 @@ export function generatePayslipPdf(data: PayslipPdfData, outputPath: string): Pr
     const doc = new PDFDocument({ size: "A4", margin: 50 });
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
-
-    // === Header: logo + company block (left), PAYSLIP + period (right) ===
-    const headerTop = doc.y;
-    let logoDrawn = false;
-    const LOGO_SIZE = 90;
-    if (data.company.logoPath && fs.existsSync(data.company.logoPath)) {
-      try {
-        doc.image(data.company.logoPath, PAGE_LEFT, headerTop, { width: LOGO_SIZE, height: LOGO_SIZE, fit: [LOGO_SIZE, LOGO_SIZE] });
-        logoDrawn = true;
-      } catch {
-        // Ignore unreadable/unsupported logo files rather than failing generation.
-      }
-    }
-
-    const textX = logoDrawn ? PAGE_LEFT + LOGO_SIZE + 14 : PAGE_LEFT;
-    const textW = HEADER_SPLIT_X - HEADER_GUTTER - textX;
-    let ly = headerTop;
-    doc.font("Helvetica-Bold").fontSize(17).fillColor(NAVY).text(data.company.name, textX, ly, { width: textW });
-    ly = doc.y + 2;
-
-    doc.font("Helvetica").fontSize(8).fillColor(GRAY);
-    if (data.company.address) {
-      doc.text(data.company.address, textX, ly, { width: textW });
-      ly = doc.y + 1;
-    }
-    const contactLine1 = [data.company.mobile, data.company.officePhone].filter(Boolean).join("   |   ");
-    if (contactLine1) {
-      doc.text(contactLine1, textX, ly, { width: textW });
-      ly = doc.y + 1;
-    }
-    const contactLine2 = [data.company.email, data.company.website].filter(Boolean).join("   |   ");
-    if (contactLine2) {
-      doc.text(contactLine2, textX, ly, { width: textW });
-      ly = doc.y + 1;
-    }
-
-    const headerRightW = PAGE_RIGHT - HEADER_SPLIT_X;
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(20)
-      .fillColor(NAVY)
-      .text("PAYSLIP", HEADER_SPLIT_X, headerTop, { width: headerRightW, align: "right" });
-    doc
-      .font("Helvetica")
-      .fontSize(9.5)
-      .fillColor(NAVY_MUTED)
-      .text(
-        `For the Month of ${MONTH_NAMES[data.period.month - 1] ?? data.period.month} ${data.period.year}`,
-        HEADER_SPLIT_X,
-        doc.y + 2,
-        { width: headerRightW, align: "right" }
-      );
-    doc.fillColor("black");
-
-    const headerBottom = Math.max(ly, doc.y, headerTop + LOGO_SIZE) + 8;
-
-    // Brand accent bar — flame-orange gradient, the one spot of strong
-    // color on an otherwise monochrome page (keeps bulk printing cheap).
-    const gradient = doc.linearGradient(PAGE_LEFT, headerBottom, PAGE_RIGHT, headerBottom);
-    gradient.stop(0, NAVY).stop(0.75, NAVY).stop(0.75, FLAME_ORANGE).stop(1, FLAME_RED);
-    doc.rect(PAGE_LEFT, headerBottom, PAGE_WIDTH, 3).fill(gradient);
-    doc.y = headerBottom + 16;
-
-    // === Employee Details (left) / Payslip Details + Gross callout (right) ===
-    function detailsBox(x: number, w: number, title: string, rows: [string, string][]) {
-      const boxTop = doc.y;
-      const barH = 18;
-      doc.rect(x, boxTop, w, barH).fill(NAVY);
-      doc.font("Helvetica-Bold").fontSize(8.5).fillColor(WHITE).text(title, x + 8, boxTop + 5);
-
-      const rowH = 16;
-      const bodyH = rows.length * rowH + 8;
-      doc.rect(x, boxTop + barH, w, bodyH).fill(LIGHT_FILL);
-
-      const labelW = 92;
-      rows.forEach(([label, value], i) => {
-        const ry = boxTop + barH + 6 + i * rowH;
-        doc.font("Helvetica-Bold").fontSize(8.5).fillColor(NAVY_MUTED).text(label, x + 8, ry, { width: labelW });
-        doc.font("Helvetica").fillColor("black").text(value || "-", x + 8 + labelW, ry, { width: w - labelW - 16 });
-      });
-
-      return boxTop + barH + bodyH;
-    }
-
-    const employeeRows: [string, string][] = [
-      ["Employee Name", data.employee.name],
-      ["Employee Code", data.employee.employeeCode],
-      ["Guardian's Name", data.employee.guardianName ?? "-"],
-      ["Designation", data.employee.designation ?? "-"],
-      ["Department", data.employee.department ?? "-"],
-      ["Bank A/c No.", data.employee.bankAccount ?? "-"],
-      ["IFSC Code", data.employee.ifscCode ?? "-"],
-      ["UAN No.", data.employee.uanNo ?? "-"],
-      ["ESI No.", data.employee.esiNo ?? "-"],
-    ];
-
-    const payslipNo = `PS-${data.period.year}${String(data.period.month).padStart(2, "0")}-${data.employee.employeeCode}`;
-    const payslipRows: [string, string][] = [
-      ["Payslip No.", payslipNo],
-      ["Pay Period", `${MONTH_NAMES[data.period.month - 1]} ${data.period.year}`],
-      ["Deployed At", data.client.name],
-      ["Paid Days", `${data.attendance.paidDays}`],
-      ["OT Hours", `${data.attendance.otHours}`],
-    ];
-
-    const detailsTop = doc.y;
-    const leftBottom = detailsBox(PAGE_LEFT, COL_WIDTH, "EMPLOYEE DETAILS", employeeRows);
-
-    doc.y = detailsTop;
-    const payslipBottom = detailsBox(RIGHT_COL_X, COL_WIDTH, "PAYSLIP DETAILS", payslipRows);
-
-    doc.y = Math.max(leftBottom, payslipBottom) + 18;
-
-    // === Earnings / Deductions table ===
-    // Earnings carry both a Rate of Pay and a Payable amount per line, shown as two columns
-    // (matching the client's paper payslip format). Basic and HRA each have a distinct rate —
-    // data.earnings.monthlySalary / monthlyHra are their full monthly entitlement, unprorated,
-    // while data.earnings.basic / hra are what's actually payable for Paid Days and what feeds
-    // Total Earnings (A) / Gross Earnings / Net Pay. Every other line (OT, other earnings) has
-    // only a payable amount, so its Rate of Pay cell is left blank. A rate is omitted (rather
-    // than shown as 0.00) when this client's sheet doesn't have that Rate column mapped yet.
-    const earningsRows: { label: string; rate?: number; payable: number }[] = [
-      { label: "Basic", rate: data.earnings.monthlySalary > 0 ? data.earnings.monthlySalary : undefined, payable: data.earnings.basic },
-      { label: "House Rent Allowance (HRA)", rate: data.earnings.monthlyHra > 0 ? data.earnings.monthlyHra : undefined, payable: data.earnings.hra },
-      { label: "OT Amount", payable: data.earnings.otAmount },
-      ...data.earnings.otherEarnings.map(({ label, amount }) => ({ label, payable: amount })),
-    ];
-    const deductionRows: [string, number][] = [
-      ["ESI", data.deductions.esi],
-      ["Provident Fund (EPF)", data.deductions.epf],
-      ["Labour Welfare Fund (LWF)", data.deductions.lwf],
-      ["Advance", data.deductions.advance],
-      ["Dress & Shoes", data.deductions.dressShoes],
-      ["Other Deduction", data.deductions.otherDeduction],
-    ];
-    const lineRows = Math.max(earningsRows.length, deductionRows.length);
-
-    const tableTop = doc.y;
-    const tableHeaderH = 20;
-    const tableRowH = 17;
-    const totalsRowH = 20;
-
-    const amtColW = 78;
-    const dedLabelX = RIGHT_COL_X + 8;
-    const dedAmtX = RIGHT_COL_X + COL_WIDTH - amtColW;
-
-    // Earnings side splits its amount column in two — Rate and Payable — so narrower than the
-    // deductions side's single amount column.
-    const earnLabelX = PAGE_LEFT + 8;
-    const rateColW = 46;
-    const payableColW = 50;
-    const earnPayableX = PAGE_LEFT + COL_WIDTH - payableColW;
-    const earnRateX = earnPayableX - 4 - rateColW;
-    const earnLabelW = earnRateX - earnLabelX - 4;
-
-    doc.rect(PAGE_LEFT, tableTop, COL_WIDTH, tableHeaderH).fill(NAVY);
-    doc.rect(RIGHT_COL_X, tableTop, COL_WIDTH, tableHeaderH).fill(NAVY);
-    doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE);
-    doc.text("EARNINGS", earnLabelX, tableTop + 6);
-    doc.font("Helvetica-Bold").fontSize(8);
-    doc.text("Rate of Pay", earnRateX, tableTop + 6, { width: rateColW, align: "right" });
-    doc.text("Payable", earnPayableX, tableTop + 6, { width: payableColW, align: "right" });
-    doc.font("Helvetica-Bold").fontSize(9);
-    doc.text("DEDUCTIONS", dedLabelX, tableTop + 6);
-    doc.text("AMOUNT (INR)", dedAmtX, tableTop + 6, { width: amtColW, align: "right" });
-
-    doc.font("Helvetica").fontSize(9).fillColor("black");
-    for (let i = 0; i < lineRows; i++) {
-      const rowY = tableTop + tableHeaderH + i * tableRowH + 5;
-      const earningsRow = earningsRows[i];
-      if (earningsRow) {
-        doc.text(earningsRow.label, earnLabelX, rowY, { width: earnLabelW });
-        if (earningsRow.rate !== undefined) {
-          doc.text(formatCurrency(earningsRow.rate), earnRateX, rowY, { width: rateColW, align: "right" });
-        }
-        doc.text(formatCurrency(earningsRow.payable), earnPayableX, rowY, { width: payableColW, align: "right" });
-      }
-      if (deductionRows[i]) {
-        doc.text(deductionRows[i][0], dedLabelX, rowY, { width: COL_WIDTH - amtColW - 16 });
-        doc.text(formatCurrency(deductionRows[i][1]), dedAmtX, rowY, { width: amtColW, align: "right" });
-      }
-      if (i < lineRows - 1) {
-        const ly2 = tableTop + tableHeaderH + (i + 1) * tableRowH;
-        doc.moveTo(PAGE_LEFT, ly2).lineTo(PAGE_LEFT + COL_WIDTH, ly2).strokeColor(LIGHT_FILL_STRONG).lineWidth(0.5).stroke();
-        doc.moveTo(RIGHT_COL_X, ly2).lineTo(RIGHT_COL_X + COL_WIDTH, ly2).stroke();
-      }
-    }
-
-    const totalsY = tableTop + tableHeaderH + lineRows * tableRowH;
-    doc.rect(PAGE_LEFT, totalsY, COL_WIDTH, totalsRowH).fill(LIGHT_FILL);
-    doc.rect(RIGHT_COL_X, totalsY, COL_WIDTH, totalsRowH).fill(LIGHT_FILL);
-    doc.font("Helvetica-Bold").fontSize(9).fillColor(NAVY);
-    doc.text("Total Earnings (A)", earnLabelX, totalsY + 6, { width: earnLabelW });
-    doc.text(formatCurrency(data.earnings.grossEarnings), earnPayableX, totalsY + 6, { width: payableColW, align: "right" });
-    doc.text("Total Deductions (B)", dedLabelX, totalsY + 6, { width: COL_WIDTH - amtColW - 16 });
-    doc.text(formatCurrency(data.deductions.totalDeductions), dedAmtX, totalsY + 6, { width: amtColW, align: "right" });
-    doc.fillColor("black");
-
-    // Light grid border around both tables — an outer box plus a divider between each column,
-    // like a printed ledger.
-    const tableBottom = totalsY + totalsRowH;
-    doc.strokeColor(LIGHT_FILL_STRONG).lineWidth(0.75);
-    doc.rect(PAGE_LEFT, tableTop, COL_WIDTH, tableBottom - tableTop).stroke();
-    doc.rect(RIGHT_COL_X, tableTop, COL_WIDTH, tableBottom - tableTop).stroke();
-    const earnRateDividerX = earnRateX - 4;
-    const earnPayableDividerX = earnPayableX - 4;
-    doc.moveTo(earnRateDividerX, tableTop).lineTo(earnRateDividerX, tableBottom).stroke();
-    doc.moveTo(earnPayableDividerX, tableTop).lineTo(earnPayableDividerX, tableBottom).stroke();
-    const dedAmtDividerX = dedAmtX - 8;
-    doc.moveTo(dedAmtDividerX, tableTop).lineTo(dedAmtDividerX, tableBottom).stroke();
-
-    doc.y = totalsY + totalsRowH + 16;
-
-    // === Net Pay: two-tone bar ===
-    const netTop = doc.y;
-    const netH = 40;
-    const netAmountW = 170;
-    doc.rect(PAGE_LEFT, netTop, PAGE_WIDTH - netAmountW, netH).fill(LIGHT_FILL_STRONG);
-    doc.rect(PAGE_RIGHT - netAmountW, netTop, netAmountW, netH).fill(NAVY);
-
-    doc.font("Helvetica-Bold").fontSize(12).fillColor(NAVY).text("Net Pay (A - B)", PAGE_LEFT + 14, netTop + 13);
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(17)
-      .fillColor(WHITE)
-      .text(`Rs. ${formatCurrency(data.netPay)}`, PAGE_RIGHT - netAmountW, netTop + 11, { width: netAmountW - 14, align: "right" });
-    doc.fillColor("black");
-
-    doc.y = netTop + netH + 10;
-    doc
-      .font("Helvetica-Oblique")
-      .fontSize(8.5)
-      .fillColor(NAVY_MUTED)
-      .text(`Amount in Words: ${amountInWords(data.netPay)}`, PAGE_LEFT, doc.y, { width: PAGE_WIDTH });
-    doc.fillColor("black");
-
-    // === Footer ===
-    // Kept well clear of the bottom margin — PDFKit silently starts a new
-    // page if a text call's computed height would cross it, which (at -95)
-    // clipped the last footer line onto a stray blank page 2. The signature
-    // block (image + caption below it) is the tallest thing down here, so
-    // -135 is sized to that, not just the one-line disclaimer text.
-    const footerY = doc.page.height - 135;
-    doc.moveTo(PAGE_LEFT, footerY).lineTo(PAGE_RIGHT, footerY).strokeColor(LIGHT_FILL_STRONG).lineWidth(0.75).stroke();
-    doc
-      .fontSize(8)
-      .font("Helvetica")
-      .fillColor(GRAY)
-      .text("This is a system-generated payslip.", PAGE_LEFT, footerY + 10, {
-        width: 320,
-      });
-
-    if (fs.existsSync(SIGNATURE_PATH)) {
-      try {
-        const sigX = PAGE_RIGHT - SIGNATURE_SIZE;
-        doc.image(SIGNATURE_PATH, sigX, footerY + 8, { width: SIGNATURE_SIZE, height: SIGNATURE_SIZE, fit: [SIGNATURE_SIZE, SIGNATURE_SIZE] });
-        doc
-          .font("Helvetica")
-          .fontSize(8)
-          .fillColor(GRAY)
-          .text("Authorized Signatory", PAGE_RIGHT - 130, footerY + 8 + SIGNATURE_SIZE + 3, { width: 130, align: "right" });
-        doc.fillColor("black");
-      } catch (err) {
-        // Never fail the whole payslip over an unreadable/unsupported signature file — but log
-        // it loudly rather than silently, so a broken stamp is diagnosable instead of a mystery.
-        console.error("[pdf.service] Failed to draw signature stamp:", err);
-      }
-    } else {
-      console.error("[pdf.service] Signature stamp file not found at:", SIGNATURE_PATH);
-    }
-
+    drawFullPayslip(doc, data);
     doc.end();
 
     stream.on("finish", () => resolve(outputPath));
     stream.on("error", reject);
   });
+}
+
+/** Draws one full-page (A4, 50pt margin) payslip onto the doc's current page. */
+function drawFullPayslip(doc: PDFKit.PDFDocument, data: PayslipPdfData) {
+  // === Header: logo + company block (left), PAYSLIP + period (right) ===
+  const headerTop = doc.y;
+  let logoDrawn = false;
+  const LOGO_SIZE = 90;
+  if (data.company.logoPath && fs.existsSync(data.company.logoPath)) {
+    try {
+      doc.image(data.company.logoPath, PAGE_LEFT, headerTop, { width: LOGO_SIZE, height: LOGO_SIZE, fit: [LOGO_SIZE, LOGO_SIZE] });
+      logoDrawn = true;
+    } catch {
+      // Ignore unreadable/unsupported logo files rather than failing generation.
+    }
+  }
+
+  const textX = logoDrawn ? PAGE_LEFT + LOGO_SIZE + 14 : PAGE_LEFT;
+  const textW = HEADER_SPLIT_X - HEADER_GUTTER - textX;
+  let ly = headerTop;
+  doc.font("Helvetica-Bold").fontSize(17).fillColor(NAVY).text(data.company.name, textX, ly, { width: textW });
+  ly = doc.y + 2;
+
+  doc.font("Helvetica").fontSize(8).fillColor(GRAY);
+  if (data.company.address) {
+    doc.text(data.company.address, textX, ly, { width: textW });
+    ly = doc.y + 1;
+  }
+  const contactLine1 = [data.company.mobile, data.company.officePhone].filter(Boolean).join("   |   ");
+  if (contactLine1) {
+    doc.text(contactLine1, textX, ly, { width: textW });
+    ly = doc.y + 1;
+  }
+  const contactLine2 = [data.company.email, data.company.website].filter(Boolean).join("   |   ");
+  if (contactLine2) {
+    doc.text(contactLine2, textX, ly, { width: textW });
+    ly = doc.y + 1;
+  }
+
+  const headerRightW = PAGE_RIGHT - HEADER_SPLIT_X;
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(20)
+    .fillColor(NAVY)
+    .text("PAYSLIP", HEADER_SPLIT_X, headerTop, { width: headerRightW, align: "right" });
+  doc
+    .font("Helvetica")
+    .fontSize(9.5)
+    .fillColor(NAVY_MUTED)
+    .text(
+      `For the Month of ${MONTH_NAMES[data.period.month - 1] ?? data.period.month} ${data.period.year}`,
+      HEADER_SPLIT_X,
+      doc.y + 2,
+      { width: headerRightW, align: "right" }
+    );
+  doc.fillColor("black");
+
+  const headerBottom = Math.max(ly, doc.y, headerTop + LOGO_SIZE) + 8;
+
+  // Brand accent bar — flame-orange gradient, the one spot of strong
+  // color on an otherwise monochrome page (keeps bulk printing cheap).
+  const gradient = doc.linearGradient(PAGE_LEFT, headerBottom, PAGE_RIGHT, headerBottom);
+  gradient.stop(0, NAVY).stop(0.75, NAVY).stop(0.75, FLAME_ORANGE).stop(1, FLAME_RED);
+  doc.rect(PAGE_LEFT, headerBottom, PAGE_WIDTH, 3).fill(gradient);
+  doc.y = headerBottom + 16;
+
+  // === Employee Details (left) / Payslip Details + Gross callout (right) ===
+  function detailsBox(x: number, w: number, title: string, rows: [string, string][]) {
+    const boxTop = doc.y;
+    const barH = 18;
+    doc.rect(x, boxTop, w, barH).fill(NAVY);
+    doc.font("Helvetica-Bold").fontSize(8.5).fillColor(WHITE).text(title, x + 8, boxTop + 5);
+
+    const rowH = 16;
+    const bodyH = rows.length * rowH + 8;
+    doc.rect(x, boxTop + barH, w, bodyH).fill(LIGHT_FILL);
+
+    const labelW = 92;
+    rows.forEach(([label, value], i) => {
+      const ry = boxTop + barH + 6 + i * rowH;
+      doc.font("Helvetica-Bold").fontSize(8.5).fillColor(NAVY_MUTED).text(label, x + 8, ry, { width: labelW });
+      doc.font("Helvetica").fillColor("black").text(value || "-", x + 8 + labelW, ry, { width: w - labelW - 16 });
+    });
+
+    return boxTop + barH + bodyH;
+  }
+
+  const employeeRows: [string, string][] = [
+    ["Employee Name", data.employee.name],
+    ["Employee Code", data.employee.employeeCode],
+    ["Guardian's Name", data.employee.guardianName ?? "-"],
+    ["Designation", data.employee.designation ?? "-"],
+    ["Department", data.employee.department ?? "-"],
+    ["Bank A/c No.", data.employee.bankAccount ?? "-"],
+    ["IFSC Code", data.employee.ifscCode ?? "-"],
+    ["UAN No.", data.employee.uanNo ?? "-"],
+    ["ESI No.", data.employee.esiNo ?? "-"],
+  ];
+
+  const payslipNo = `PS-${data.period.year}${String(data.period.month).padStart(2, "0")}-${data.employee.employeeCode}`;
+  const payslipRows: [string, string][] = [
+    ["Payslip No.", payslipNo],
+    ["Pay Period", `${MONTH_NAMES[data.period.month - 1]} ${data.period.year}`],
+    ["Deployed At", data.client.name],
+    ["Paid Days", `${data.attendance.paidDays}`],
+    ["OT Hours", `${data.attendance.otHours}`],
+  ];
+
+  const detailsTop = doc.y;
+  const leftBottom = detailsBox(PAGE_LEFT, COL_WIDTH, "EMPLOYEE DETAILS", employeeRows);
+
+  doc.y = detailsTop;
+  const payslipBottom = detailsBox(RIGHT_COL_X, COL_WIDTH, "PAYSLIP DETAILS", payslipRows);
+
+  doc.y = Math.max(leftBottom, payslipBottom) + 18;
+
+  // === Earnings / Deductions table ===
+  // Earnings carry both a Rate of Pay and a Payable amount per line, shown as two columns
+  // (matching the client's paper payslip format). Basic and HRA each have a distinct rate —
+  // data.earnings.monthlySalary / monthlyHra are their full monthly entitlement, unprorated,
+  // while data.earnings.basic / hra are what's actually payable for Paid Days and what feeds
+  // Total Earnings (A) / Gross Earnings / Net Pay. Every other line (OT, other earnings) has
+  // only a payable amount, so its Rate of Pay cell is left blank. A rate is omitted (rather
+  // than shown as 0.00) when this client's sheet doesn't have that Rate column mapped yet.
+  const earningsRows: { label: string; rate?: number; payable: number }[] = [
+    { label: "Basic", rate: data.earnings.monthlySalary > 0 ? data.earnings.monthlySalary : undefined, payable: data.earnings.basic },
+    { label: "House Rent Allowance (HRA)", rate: data.earnings.monthlyHra > 0 ? data.earnings.monthlyHra : undefined, payable: data.earnings.hra },
+    { label: "OT Amount", payable: data.earnings.otAmount },
+    ...data.earnings.otherEarnings.map(({ label, amount }) => ({ label, payable: amount })),
+  ];
+  const deductionRows: [string, number][] = [
+    ["ESI", data.deductions.esi],
+    ["Provident Fund (EPF)", data.deductions.epf],
+    ["Labour Welfare Fund (LWF)", data.deductions.lwf],
+    ["Advance", data.deductions.advance],
+    ["Dress & Shoes", data.deductions.dressShoes],
+    ["Other Deduction", data.deductions.otherDeduction],
+  ];
+  const lineRows = Math.max(earningsRows.length, deductionRows.length);
+
+  const tableTop = doc.y;
+  const tableHeaderH = 20;
+  const tableRowH = 17;
+  const totalsRowH = 20;
+
+  const amtColW = 78;
+  const dedLabelX = RIGHT_COL_X + 8;
+  const dedAmtX = RIGHT_COL_X + COL_WIDTH - amtColW;
+
+  // Earnings side splits its amount column in two — Rate and Payable — so narrower than the
+  // deductions side's single amount column.
+  const earnLabelX = PAGE_LEFT + 8;
+  const rateColW = 46;
+  const payableColW = 50;
+  const earnPayableX = PAGE_LEFT + COL_WIDTH - payableColW;
+  const earnRateX = earnPayableX - 4 - rateColW;
+  const earnLabelW = earnRateX - earnLabelX - 4;
+
+  doc.rect(PAGE_LEFT, tableTop, COL_WIDTH, tableHeaderH).fill(NAVY);
+  doc.rect(RIGHT_COL_X, tableTop, COL_WIDTH, tableHeaderH).fill(NAVY);
+  doc.font("Helvetica-Bold").fontSize(9).fillColor(WHITE);
+  doc.text("EARNINGS", earnLabelX, tableTop + 6);
+  doc.font("Helvetica-Bold").fontSize(8);
+  doc.text("Rate of Pay", earnRateX, tableTop + 6, { width: rateColW, align: "right" });
+  doc.text("Payable", earnPayableX, tableTop + 6, { width: payableColW, align: "right" });
+  doc.font("Helvetica-Bold").fontSize(9);
+  doc.text("DEDUCTIONS", dedLabelX, tableTop + 6);
+  doc.text("AMOUNT (INR)", dedAmtX, tableTop + 6, { width: amtColW, align: "right" });
+
+  doc.font("Helvetica").fontSize(9).fillColor("black");
+  for (let i = 0; i < lineRows; i++) {
+    const rowY = tableTop + tableHeaderH + i * tableRowH + 5;
+    const earningsRow = earningsRows[i];
+    if (earningsRow) {
+      doc.text(earningsRow.label, earnLabelX, rowY, { width: earnLabelW });
+      if (earningsRow.rate !== undefined) {
+        doc.text(formatCurrency(earningsRow.rate), earnRateX, rowY, { width: rateColW, align: "right" });
+      }
+      doc.text(formatCurrency(earningsRow.payable), earnPayableX, rowY, { width: payableColW, align: "right" });
+    }
+    if (deductionRows[i]) {
+      doc.text(deductionRows[i][0], dedLabelX, rowY, { width: COL_WIDTH - amtColW - 16 });
+      doc.text(formatCurrency(deductionRows[i][1]), dedAmtX, rowY, { width: amtColW, align: "right" });
+    }
+    if (i < lineRows - 1) {
+      const ly2 = tableTop + tableHeaderH + (i + 1) * tableRowH;
+      doc.moveTo(PAGE_LEFT, ly2).lineTo(PAGE_LEFT + COL_WIDTH, ly2).strokeColor(LIGHT_FILL_STRONG).lineWidth(0.5).stroke();
+      doc.moveTo(RIGHT_COL_X, ly2).lineTo(RIGHT_COL_X + COL_WIDTH, ly2).stroke();
+    }
+  }
+
+  const totalsY = tableTop + tableHeaderH + lineRows * tableRowH;
+  doc.rect(PAGE_LEFT, totalsY, COL_WIDTH, totalsRowH).fill(LIGHT_FILL);
+  doc.rect(RIGHT_COL_X, totalsY, COL_WIDTH, totalsRowH).fill(LIGHT_FILL);
+  doc.font("Helvetica-Bold").fontSize(9).fillColor(NAVY);
+  doc.text("Total Earnings (A)", earnLabelX, totalsY + 6, { width: earnLabelW });
+  doc.text(formatCurrency(data.earnings.grossEarnings), earnPayableX, totalsY + 6, { width: payableColW, align: "right" });
+  doc.text("Total Deductions (B)", dedLabelX, totalsY + 6, { width: COL_WIDTH - amtColW - 16 });
+  doc.text(formatCurrency(data.deductions.totalDeductions), dedAmtX, totalsY + 6, { width: amtColW, align: "right" });
+  doc.fillColor("black");
+
+  // Light grid border around both tables — an outer box plus a divider between each column,
+  // like a printed ledger.
+  const tableBottom = totalsY + totalsRowH;
+  doc.strokeColor(LIGHT_FILL_STRONG).lineWidth(0.75);
+  doc.rect(PAGE_LEFT, tableTop, COL_WIDTH, tableBottom - tableTop).stroke();
+  doc.rect(RIGHT_COL_X, tableTop, COL_WIDTH, tableBottom - tableTop).stroke();
+  const earnRateDividerX = earnRateX - 4;
+  const earnPayableDividerX = earnPayableX - 4;
+  doc.moveTo(earnRateDividerX, tableTop).lineTo(earnRateDividerX, tableBottom).stroke();
+  doc.moveTo(earnPayableDividerX, tableTop).lineTo(earnPayableDividerX, tableBottom).stroke();
+  const dedAmtDividerX = dedAmtX - 8;
+  doc.moveTo(dedAmtDividerX, tableTop).lineTo(dedAmtDividerX, tableBottom).stroke();
+
+  doc.y = totalsY + totalsRowH + 16;
+
+  // === Net Pay: two-tone bar ===
+  const netTop = doc.y;
+  const netH = 40;
+  const netAmountW = 170;
+  doc.rect(PAGE_LEFT, netTop, PAGE_WIDTH - netAmountW, netH).fill(LIGHT_FILL_STRONG);
+  doc.rect(PAGE_RIGHT - netAmountW, netTop, netAmountW, netH).fill(NAVY);
+
+  doc.font("Helvetica-Bold").fontSize(12).fillColor(NAVY).text("Net Pay (A - B)", PAGE_LEFT + 14, netTop + 13);
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(17)
+    .fillColor(WHITE)
+    .text(`Rs. ${formatCurrency(data.netPay)}`, PAGE_RIGHT - netAmountW, netTop + 11, { width: netAmountW - 14, align: "right" });
+  doc.fillColor("black");
+
+  doc.y = netTop + netH + 10;
+  doc
+    .font("Helvetica-Oblique")
+    .fontSize(8.5)
+    .fillColor(NAVY_MUTED)
+    .text(`Amount in Words: ${amountInWords(data.netPay)}`, PAGE_LEFT, doc.y, { width: PAGE_WIDTH });
+  doc.fillColor("black");
+
+  // === Footer ===
+  // Kept well clear of the bottom margin — PDFKit silently starts a new
+  // page if a text call's computed height would cross it, which (at -95)
+  // clipped the last footer line onto a stray blank page 2. The signature
+  // block (image + caption below it) is the tallest thing down here, so
+  // -135 is sized to that, not just the one-line disclaimer text.
+  const footerY = doc.page.height - 135;
+  doc.moveTo(PAGE_LEFT, footerY).lineTo(PAGE_RIGHT, footerY).strokeColor(LIGHT_FILL_STRONG).lineWidth(0.75).stroke();
+  doc
+    .fontSize(8)
+    .font("Helvetica")
+    .fillColor(GRAY)
+    .text("This is a system-generated payslip.", PAGE_LEFT, footerY + 10, {
+      width: 320,
+    });
+
+  if (fs.existsSync(SIGNATURE_PATH)) {
+    try {
+      const sigX = PAGE_RIGHT - SIGNATURE_SIZE;
+      doc.image(SIGNATURE_PATH, sigX, footerY + 8, { width: SIGNATURE_SIZE, height: SIGNATURE_SIZE, fit: [SIGNATURE_SIZE, SIGNATURE_SIZE] });
+      doc
+        .font("Helvetica")
+        .fontSize(8)
+        .fillColor(GRAY)
+        .text("Authorized Signatory", PAGE_RIGHT - 130, footerY + 8 + SIGNATURE_SIZE + 3, { width: 130, align: "right" });
+      doc.fillColor("black");
+    } catch (err) {
+      // Never fail the whole payslip over an unreadable/unsupported signature file — but log
+      // it loudly rather than silently, so a broken stamp is diagnosable instead of a mystery.
+      console.error("[pdf.service] Failed to draw signature stamp:", err);
+    }
+  } else {
+    console.error("[pdf.service] Signature stamp file not found at:", SIGNATURE_PATH);
+  }
+}
+
+// ============================================================================
+// Print sheet — many payslips in one PDF, 1, 2 or 3 per A4 page, for printing
+// on paper. 1-up reuses the full-page layout above; 2-up and 3-up use a
+// compact layout sized to a half/third of the page, separated by dashed cut
+// lines. The individual full-page PDFs (sent on WhatsApp/email) are untouched.
+// ============================================================================
+
+export type PayslipsPerPage = 1 | 2 | 3;
+
+export function isPayslipsPerPage(n: unknown): n is PayslipsPerPage {
+  return n === 1 || n === 2 || n === 3;
+}
+
+/** Streams one PDF containing every payslip in `items`, `perPage` to an A4 page. */
+export function streamPayslipPrintSheet(items: PayslipPdfData[], perPage: PayslipsPerPage, out: NodeJS.WritableStream): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Compact slips position everything absolutely, so no margin is needed — and a zero bottom
+    // margin keeps PDFKit from auto-inserting a page when text lands near the page's foot.
+    const doc =
+      perPage === 1
+        ? new PDFDocument({ size: "A4", margin: 50, autoFirstPage: false })
+        : new PDFDocument({ size: "A4", margin: 0, autoFirstPage: false });
+    doc.pipe(out);
+    out.on("finish", () => resolve());
+    out.on("error", reject);
+
+    items.forEach((data, i) => {
+      const slot = i % perPage;
+      if (slot === 0) doc.addPage();
+      if (perPage === 1) {
+        drawFullPayslip(doc, data);
+        return;
+      }
+      const slotH = doc.page.height / perPage;
+      const top = slot * slotH;
+      drawCompactPayslip(doc, data, top, slotH, perPage === 2 ? 1.35 : 1);
+      if (slot > 0) {
+        doc.save();
+        doc.moveTo(12, top).lineTo(doc.page.width - 12, top).dash(4, { space: 3 }).strokeColor("#9ca3af").lineWidth(0.5).stroke();
+        doc.undash();
+        doc.restore();
+      }
+    });
+
+    doc.end();
+  });
+}
+
+/**
+ * Draws a compact payslip into the horizontal band [top, top + height) of the current page.
+ * `s` scales type and spacing (1 for 3-up, 1.2 for 2-up). Line-item rows shrink to fit if a
+ * payslip has many other-earning columns, so a slip never spills into the next one's band.
+ */
+function drawCompactPayslip(doc: PDFKit.PDFDocument, data: PayslipPdfData, top: number, height: number, s: number) {
+  const x0 = 24;
+  const x1 = doc.page.width - 24;
+  const w = x1 - x0;
+  const pad = 12 * s;
+  const oneLine = { lineBreak: false } as const;
+  // Single line of variable-length text (names, labels): shrinks the current font size down to
+  // 75% to fit `width`, then truncates with an ellipsis — never wraps into the row below.
+  const fitLine = (text: string, x: number, ty: number, width: number, align: "left" | "right" = "left") => {
+    const size = (doc as unknown as { _fontSize: number })._fontSize;
+    let sz = size;
+    while (sz > size * 0.75 && doc.fontSize(sz).widthOfString(text) > width) sz -= 0.25;
+    let t = text;
+    if (doc.widthOfString(t) > width) {
+      while (t.length > 1 && doc.widthOfString(t + "…") > width) t = t.slice(0, -1);
+      t = t.trimEnd() + "…";
+    }
+    doc.text(t, x, ty + (size - sz) / 2, { width, align, lineBreak: false });
+    doc.fontSize(size);
+  };
+  let y = top + pad;
+
+  // --- Header: small logo + company (left), PAYSLIP + period (right) ---
+  const logoSize = 28 * s;
+  let textX = x0;
+  if (data.company.logoPath && fs.existsSync(data.company.logoPath)) {
+    try {
+      doc.image(data.company.logoPath, x0, y, { fit: [logoSize, logoSize] });
+      textX = x0 + logoSize + 8;
+    } catch {
+      // Ignore unreadable/unsupported logo files rather than failing generation.
+    }
+  }
+  const rightW = 170 * s;
+  const leftW = x1 - rightW - 10 - textX;
+  doc.font("Helvetica-Bold").fontSize(10.5 * s).fillColor(NAVY);
+  fitLine(data.company.name, textX, y, leftW);
+  const contact = [data.company.address, [data.company.mobile, data.company.email].filter(Boolean).join("  |  ")]
+    .filter(Boolean)
+    .join("  |  ");
+  if (contact) {
+    doc.font("Helvetica").fontSize(6.5 * s).fillColor(GRAY).text(contact, textX, y + 13 * s, { width: leftW, height: 16 * s, ellipsis: true });
+  }
+  const period = `${MONTH_NAMES[data.period.month - 1] ?? data.period.month} ${data.period.year}`;
+  doc.font("Helvetica-Bold").fontSize(12 * s).fillColor(NAVY).text("PAYSLIP", x1 - rightW, y, { width: rightW, align: "right", ...oneLine });
+  doc.font("Helvetica").fontSize(7.5 * s).fillColor(NAVY_MUTED).text(`For the Month of ${period}`, x1 - rightW, y + 15 * s, { width: rightW, align: "right", ...oneLine });
+  y += logoSize + 3 * s;
+
+  const gradient = doc.linearGradient(x0, y, x1, y);
+  gradient.stop(0, NAVY).stop(0.75, NAVY).stop(0.75, FLAME_ORANGE).stop(1, FLAME_RED);
+  doc.rect(x0, y, w, 2).fill(gradient);
+  y += 2 + 5 * s;
+
+  // --- Employee / payslip details grid ---
+  const payslipNo = `PS-${data.period.year}${String(data.period.month).padStart(2, "0")}-${data.employee.employeeCode}`;
+  // Laid out column by column. 3-up uses 4 narrow columns; 2-up's larger type needs the same
+  // cells in 3 wider columns (4 rows) so bank a/c numbers etc. fit without truncation.
+  const name: [string, string] = ["Name", data.employee.name];
+  const guardian: [string, string] = ["F/H Name", data.employee.guardianName || "-"];
+  const uan: [string, string] = ["UAN No.", data.employee.uanNo || "-"];
+  const code: [string, string] = ["Emp. Code", data.employee.employeeCode];
+  const bank: [string, string] = ["Bank A/c", data.employee.bankAccount || "-"];
+  const esiNo: [string, string] = ["ESI No.", data.employee.esiNo || "-"];
+  const designation: [string, string] = ["Designation", data.employee.designation || data.employee.department || "-"];
+  const ifsc: [string, string] = ["IFSC", data.employee.ifscCode || "-"];
+  const ot: [string, string] = ["OT Hours", `${data.attendance.otHours}`];
+  const deployed: [string, string] = ["Deployed At", data.client.name];
+  const paidDays: [string, string] = ["Paid Days", `${data.attendance.paidDays}`];
+  const slipNo: [string, string] = ["Payslip No.", payslipNo];
+  const columns: [string, string][][] =
+    s > 1
+      ? [
+          [name, guardian, code, uan],
+          [bank, ifsc, esiNo, designation],
+          [deployed, paidDays, ot, slipNo],
+        ]
+      : [
+          [name, guardian, uan],
+          [code, bank, esiNo],
+          [designation, ifsc, ot],
+          [deployed, paidDays, slipNo],
+        ];
+  // The Name column gets extra width — long names are the usual overflow.
+  const colFractions = s > 1 ? [0.38, 0.31, 0.31] : [0.31, 0.23, 0.23, 0.23];
+  const colWs = colFractions.map((f) => f * w);
+  const colXs = colWs.map((_, c) => x0 + colWs.slice(0, c).reduce((acc, cw) => acc + cw, 0));
+  const gridRows = Math.max(...columns.map((c) => c.length));
+  const cellH = 10.5 * s;
+  const gridH = gridRows * cellH + 6 * s;
+  doc.rect(x0, y, w, gridH).fill(LIGHT_FILL);
+  const labelW = 46 * s;
+  columns.forEach((cells, col) => {
+    cells.forEach(([label, value], row) => {
+      const cx = colXs[col] + 5;
+      const cy = y + 3 * s + row * cellH;
+      doc.font("Helvetica-Bold").fontSize(6.5 * s).fillColor(NAVY_MUTED).text(label, cx, cy + 0.5 * s, { width: labelW, ...oneLine });
+      doc.font("Helvetica").fontSize(7.2 * s).fillColor("black");
+      fitLine(value || "-", cx + labelW, cy, colWs[col] - labelW - 8);
+    });
+  });
+  y += gridH + 6 * s;
+
+  // --- Earnings / deductions ---
+  // Lines that are zero and optional are dropped here (unlike the full-page slip) to save space.
+  const earnings: { label: string; rate?: number; payable: number }[] = [
+    { label: "Basic", rate: data.earnings.monthlySalary > 0 ? data.earnings.monthlySalary : undefined, payable: data.earnings.basic },
+    ...(data.earnings.hra > 0 || data.earnings.monthlyHra > 0
+      ? [{ label: "HRA", rate: data.earnings.monthlyHra > 0 ? data.earnings.monthlyHra : undefined, payable: data.earnings.hra }]
+      : []),
+    { label: "OT Amount", payable: data.earnings.otAmount },
+    ...data.earnings.otherEarnings.map(({ label, amount }) => ({ label, payable: amount })),
+  ];
+  const deductions: [string, number][] = [
+    ["ESI", data.deductions.esi],
+    ["EPF", data.deductions.epf],
+    ["LWF", data.deductions.lwf],
+    ["Advance", data.deductions.advance],
+    ...(data.deductions.dressShoes ? [["Dress & Shoes", data.deductions.dressShoes] as [string, number]] : []),
+    ...(data.deductions.otherDeduction ? [["Other Deduction", data.deductions.otherDeduction] as [string, number]] : []),
+  ];
+  const lines = Math.max(earnings.length, deductions.length);
+
+  const headH = 12 * s;
+  const totalsH = 12 * s;
+  const netH = 17 * s;
+  const footerH = 30 * s;
+  const bottomLimit = top + height - pad;
+  const spaceForLines = bottomLimit - y - headH - totalsH - 5 * s - netH - 3 * s - footerH;
+  const rowH = Math.max(7, Math.min(10 * s, spaceForLines / lines));
+  const rowFont = Math.min(7.2 * s, rowH * 0.78);
+
+  const gap = 10;
+  const colW = (w - gap) / 2;
+  const rightX = x0 + colW + gap;
+  const amtW = 58 * s;
+  const rateW = 50 * s;
+  const earnPayX = x0 + colW - amtW - 5;
+  const earnRateX = earnPayX - rateW - 4;
+  const dedAmtX = rightX + colW - amtW - 5;
+
+  doc.rect(x0, y, colW, headH).fill(NAVY);
+  doc.rect(rightX, y, colW, headH).fill(NAVY);
+  doc.font("Helvetica-Bold").fontSize(7 * s).fillColor(WHITE);
+  const headTextY = y + 3 * s;
+  doc.text("EARNINGS", x0 + 5, headTextY, oneLine);
+  doc.text("Rate", earnRateX, headTextY, { width: rateW, align: "right", ...oneLine });
+  doc.text("Payable", earnPayX, headTextY, { width: amtW, align: "right", ...oneLine });
+  doc.text("DEDUCTIONS", rightX + 5, headTextY, oneLine);
+  doc.text("Amount", dedAmtX, headTextY, { width: amtW, align: "right", ...oneLine });
+  y += headH;
+
+  doc.font("Helvetica").fontSize(rowFont).fillColor("black");
+  for (let i = 0; i < lines; i++) {
+    const ry = y + i * rowH + (rowH - rowFont) / 2;
+    const e = earnings[i];
+    if (e) {
+      fitLine(e.label, x0 + 5, ry, earnRateX - x0 - 9);
+      if (e.rate !== undefined) doc.text(formatCurrency(e.rate), earnRateX, ry, { width: rateW, align: "right", ...oneLine });
+      doc.text(formatCurrency(e.payable), earnPayX, ry, { width: amtW, align: "right", ...oneLine });
+    }
+    const d = deductions[i];
+    if (d) {
+      fitLine(d[0], rightX + 5, ry, dedAmtX - rightX - 9);
+      doc.text(formatCurrency(d[1]), dedAmtX, ry, { width: amtW, align: "right", ...oneLine });
+    }
+  }
+  const linesBottom = y + lines * rowH;
+  doc.rect(x0, linesBottom, colW, totalsH).fill(LIGHT_FILL);
+  doc.rect(rightX, linesBottom, colW, totalsH).fill(LIGHT_FILL);
+  doc.font("Helvetica-Bold").fontSize(7.2 * s).fillColor(NAVY);
+  const totY = linesBottom + 3 * s;
+  doc.text("Total Earnings (A)", x0 + 5, totY, oneLine);
+  doc.text(formatCurrency(data.earnings.grossEarnings), earnPayX, totY, { width: amtW, align: "right", ...oneLine });
+  doc.text("Total Deductions (B)", rightX + 5, totY, oneLine);
+  doc.text(formatCurrency(data.deductions.totalDeductions), dedAmtX, totY, { width: amtW, align: "right", ...oneLine });
+  const tableTop = y - headH;
+  const tableBottom = linesBottom + totalsH;
+  doc.strokeColor(LIGHT_FILL_STRONG).lineWidth(0.6);
+  doc.rect(x0, tableTop, colW, tableBottom - tableTop).stroke();
+  doc.rect(rightX, tableTop, colW, tableBottom - tableTop).stroke();
+  y = tableBottom + 5 * s;
+
+  // --- Net pay bar ---
+  const netAmtW = 130 * s;
+  doc.rect(x0, y, w - netAmtW, netH).fill(LIGHT_FILL_STRONG);
+  doc.rect(x1 - netAmtW, y, netAmtW, netH).fill(NAVY);
+  doc.font("Helvetica-Bold").fontSize(8.5 * s).fillColor(NAVY).text("Net Pay (A - B)", x0 + 6, y + 4.5 * s, oneLine);
+  doc
+    .font("Helvetica-Oblique")
+    .fontSize(6.5 * s)
+    .fillColor(NAVY_MUTED);
+  fitLine(amountInWords(data.netPay), x0 + 80 * s, y + 5.5 * s, w - netAmtW - 86 * s, "right");
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(10 * s)
+    .fillColor(WHITE)
+    .text(`Rs. ${formatCurrency(data.netPay)}`, x1 - netAmtW, y + 3.5 * s, { width: netAmtW - 6, align: "right", ...oneLine });
+  y += netH + 3 * s;
+
+  // --- Footer: disclaimer (left), signature stamp (right) ---
+  doc.font("Helvetica").fontSize(6.5 * s).fillColor(GRAY).text("This is a system-generated payslip.", x0, y + footerH - 9 * s, oneLine);
+  const sigSize = footerH - 8 * s;
+  if (fs.existsSync(SIGNATURE_PATH)) {
+    try {
+      doc.image(SIGNATURE_PATH, x1 - sigSize - 20 * s, y, { fit: [sigSize, sigSize] });
+    } catch (err) {
+      console.error("[pdf.service] Failed to draw signature stamp:", err);
+    }
+  }
+  doc.font("Helvetica").fontSize(6.5 * s).fillColor(GRAY).text("Authorized Signatory", x1 - 100, y + sigSize + 1, { width: 100, align: "right", ...oneLine });
+  doc.fillColor("black");
 }
 
 // ============================================================================

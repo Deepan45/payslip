@@ -57,3 +57,16 @@ export async function printPayslip(payslipId: string) {
   const win = window.open(url, "_blank");
   win?.addEventListener("load", () => win.print());
 }
+
+/**
+ * Opens one combined PDF of a sheet's payslips — 1, 2 or 3 per A4 page — in a new tab for
+ * printing. Omit perPage to use the default from Settings; pass recordIds to print only those.
+ */
+export async function printPayslipsForSheet(sheetId: string, perPage?: 1 | 2 | 3, recordIds?: string[]) {
+  const params: Record<string, string> = {};
+  if (perPage) params.perPage = String(perPage);
+  if (recordIds?.length) params.recordIds = recordIds.join(",");
+  const res = await api.get(`/payslips/sheet/${sheetId}/print`, { params, responseType: "blob" });
+  const url = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+  window.open(url, "_blank");
+}

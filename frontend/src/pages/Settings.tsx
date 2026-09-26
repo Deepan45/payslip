@@ -34,6 +34,7 @@ interface Company {
   bankAccountNo: string | null;
   bankIfscCode: string | null;
   billingTerms: string | null;
+  payslipsPerPage: number;
 }
 
 type SettingsTab = "profile" | "statutory" | "billing" | "backup";
@@ -85,6 +86,7 @@ export function Settings() {
   const [bankAccountNo, setBankAccountNo] = useState("");
   const [bankIfscCode, setBankIfscCode] = useState("");
   const [billingTerms, setBillingTerms] = useState("");
+  const [payslipsPerPage, setPayslipsPerPage] = useState(3);
 
   const [backingUp, setBackingUp] = useState(false);
   const [backupError, setBackupError] = useState<string | null>(null);
@@ -118,6 +120,7 @@ export function Settings() {
     setBankAccountNo(c.bankAccountNo ?? "");
     setBankIfscCode(c.bankIfscCode ?? "");
     setBillingTerms(c.billingTerms ?? "");
+    setPayslipsPerPage(c.payslipsPerPage ?? 3);
   }
 
   useEffect(() => {
@@ -140,6 +143,7 @@ export function Settings() {
         esiEmployerRate, esiWageCeiling,
         lwfEmployeeRate, lwfEmployeeMaxAmt, lwfEmployerRate, lwfEmployerMaxAmt,
         gstin, bankName, bankAccountNo, bankIfscCode, billingTerms,
+        payslipsPerPage,
       });
       applyCompany(res.data.company);
 
@@ -449,6 +453,20 @@ export function Settings() {
               placeholder="e.g. Payment due within 15 days of invoice date"
             />
           </label>
+
+          <p className="small" style={{ marginTop: 20, marginBottom: 4, fontWeight: 600 }}>Payslip printing</p>
+          <label>
+            Payslips per A4 page (default for "Print Payslips")
+            <select value={payslipsPerPage} onChange={(e) => setPayslipsPerPage(Number(e.target.value))}>
+              <option value={3}>3 per page — saves the most paper</option>
+              <option value={2}>2 per page — larger text</option>
+              <option value={1}>1 per page — full-size payslip</option>
+            </select>
+          </label>
+          <p className="small muted" style={{ marginTop: 4 }}>
+            Only affects the combined print PDF. Individual payslips downloaded or sent on WhatsApp/email are
+            always full-page. The layout can also be changed each time you print.
+          </p>
         </div>
 
         <div className="card" style={{ maxWidth: 560, display: activeTab === "backup" ? undefined : "none" }}>

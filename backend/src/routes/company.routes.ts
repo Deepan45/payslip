@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { prisma } from "../config/db";
 import { requireAuth, requirePermission } from "../middleware/auth";
+import { isPayslipsPerPage } from "../services/pdf.service";
 
 const LOGO_DIR = path.join(__dirname, "..", "..", "storage", "logo");
 fs.mkdirSync(LOGO_DIR, { recursive: true });
@@ -31,6 +32,7 @@ companyRouter.put("/", requireAuth, requirePermission("settings.manage"), async 
     esiEmployerRate, esiWageCeiling,
     lwfEmployeeRate, lwfEmployeeMaxAmt, lwfEmployerRate, lwfEmployerMaxAmt,
     gstin, bankName, bankAccountNo, bankIfscCode, billingTerms,
+    payslipsPerPage,
   } = req.body as {
     name?: string;
     address?: string;
@@ -59,8 +61,12 @@ companyRouter.put("/", requireAuth, requirePermission("settings.manage"), async 
     bankAccountNo?: string;
     bankIfscCode?: string;
     billingTerms?: string;
+    payslipsPerPage?: number;
   };
   if (!name) return res.status(400).json({ error: "Company name is required" });
+  if (payslipsPerPage !== undefined && !isPayslipsPerPage(payslipsPerPage)) {
+    return res.status(400).json({ error: "Payslips per page must be 1, 2 or 3" });
+  }
 
   const data = {
     name, address, mobile, officePhone, email, website,
@@ -79,6 +85,7 @@ companyRouter.put("/", requireAuth, requirePermission("settings.manage"), async 
     ...(lwfEmployeeMaxAmt !== undefined && { lwfEmployeeMaxAmt }),
     ...(lwfEmployerRate !== undefined && { lwfEmployerRate }),
     ...(lwfEmployerMaxAmt !== undefined && { lwfEmployerMaxAmt }),
+    ...(payslipsPerPage !== undefined && { payslipsPerPage }),
   };
   const existing = await prisma.companySettings.findFirst();
   const company = existing
