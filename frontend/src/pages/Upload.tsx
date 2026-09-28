@@ -25,6 +25,8 @@ interface UploadResult {
   sheet: { id: string; fileName: string };
   generatedCount: number;
   rowErrors: { rowNumber: number; message: string }[];
+  /** Rows imported with an Employee Code filled in from the name — worth a check. */
+  rowWarnings?: { rowNumber: number; message: string }[];
   generationErrors: { employeeCode: string; message: string }[];
   bill: { id: string; grandTotal: number; employeeCount: number; serviceCharge: number; billingRateUsed: number | null } | null;
 }
@@ -368,6 +370,23 @@ export function Upload() {
               )}
               .
             </p>
+          )}
+
+          {(result.rowWarnings?.length ?? 0) > 0 && (
+            <>
+              <p className="alert alert-warning">
+                {result.rowWarnings!.length} row(s) had no Employee Code — imported using the employee's name. Check
+                these are the right people. In future sheets, put the code shown below in the Employee Code column (or
+                leave it blank again) so their payslip and PF/ESI history stays under one employee:
+              </p>
+              <ul className="small">
+                {result.rowWarnings!.slice(0, 20).map((e, i) => (
+                  <li key={i}>
+                    Row {e.rowNumber}: {e.message}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
 
           {result.rowErrors.length > 0 && (

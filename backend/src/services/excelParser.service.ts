@@ -514,6 +514,7 @@ export interface OtherEarningItem {
 }
 
 export interface ParsedSalaryRow {
+  /** "" when the sheet's code cell was blank — filled in by resolveMissingEmployeeCodes before use. */
   employeeCode: string;
   name: string;
   guardianName?: string;
@@ -591,20 +592,18 @@ export function parseWithMapping(grid: unknown[][], mapping: ColumnMapping): Par
 
     const employeeCode = (textOf("employeeCode", row) ?? "").trim();
     const name = (textOf("name", row) ?? "").trim();
-    if (!employeeCode || !name) {
+    if (!name) {
       // Skip rows with neither code nor name silently — blank trailing rows and
-      // totals rows (numbers only, no identity). Report genuinely partial rows,
-      // i.e. an employee with one of code/name missing.
-      if (employeeCode || name) {
-        const missing = employeeCode ? "name" : "employeeCode";
-        const label = missing === "name" ? "Name" : "Employee Code";
-        const ref = mapping.columns[missing]?.[0];
+      // totals rows (numbers only, no identity). A code without a name is reported.
+      if (employeeCode) {
+        const ref = mapping.columns.name?.[0];
         const where = ref ? ` (column ${columnLetter(ref.index)})` : " (column not mapped)";
-        const who = employeeCode ? `code ${employeeCode}` : name;
-        errors.push({ rowNumber, message: `${label} is empty for ${who}${where} — row skipped` });
+        errors.push({ rowNumber, message: `Name is empty for code ${employeeCode}${where} — row skipped` });
       }
       continue;
     }
+    // A name without a code is kept with employeeCode "" — the upload controller resolves it
+    // by name (see resolveMissingEmployeeCodes), since that needs the database.
 
     const basic = numOf("basic", row);
     const monthlySalary = numOf("monthlySalary", row);
